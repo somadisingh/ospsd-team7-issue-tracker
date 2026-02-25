@@ -30,60 +30,26 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-  "D203", # `one-blank-line-before-class` (D203) and `no-blank-line-before-class` (D211) are incompatible. Ignoring D203.
-  "D213", # `multi-line-summary-first-line` (D212) and `multi-line-summary-second-line` (D213) are incompatible. Ignoring D213.
-  "COM812", # `missing-trailing-comma` conflicts with the ruff formatter which handles trailing commas automatically.
-  "EM101", # Exception must not use string literal - NotImplementedError with inline strings is standard
-  "EM102", # Same as EM101 for assert
-  "N802",  # Function name should be lowercase - isComplete matches Trello API camelCase
+  "D203",   # `incorrect-blank-line-before-class` (D203) and `no-blank-line-before-class` (D211) are incompatible. Ignoring `incorrect-blank-line-before-class`.
+  "D213",   # `multi-line-summary-first-line` (D212) and `multi-line-summary-second-line` (D213) are incompatible. Ignoring `multi-line-summary-second-line`.
+  "COM812", # `missing-trailing-comma` conflicts with the ruff formatter, which handles trailing commas automatically.
+  "S101",   # Use of `assert` detected — asserts are intentional in our codebase; tests use them profusely.
 ]
 
 [tool.ruff.lint.per-file-ignores]
 # Test files: relaxed rules for pytest patterns and fixtures
 "**/tests/**/*.py" = [
-  "S101",    # Use of assert — standard in pytest tests
-  "PLR2004", # Magic value comparisons — common in test assertions
-  "D100",    # Missing module docstring — test modules are self-documenting
-  "D103",    # Missing function docstring — test function names describe intent
-  "A002",    # Shadowing builtin (id) — test fixtures
-  "ANN001",  # Missing type annotation — pytest fixtures
-  "ANN201",  # Missing return type — test functions
-  "ANN202",  # Missing return type — private/test methods
-  "ANN204",  # Missing return type — __init__
-  "ANN401",  # Dynamically typed expressions (Any) — needed for mocking
-  "FBT001",  # Boolean positional arg — test fixtures
-  "N803",    # Argument lowercase — matches API (isComplete)
-  "PGH003",  # Use specific rule codes — type: ignore in tests
-  "ARG001",  # Unused function argument — pytest fixtures may appear unused
-  "ARG002",  # Unused method argument — same as above
-  "SLF001",  # Private member access — tests may need to verify internal state
   "TRY300",  # Return inside try block — common pattern in test error handling
   "BLE001",  # Blind exception catch — tests may catch broad exceptions intentionally
+  "ANN401",  # Dynamically typed expressions (Any) — needed for mocking
+  "SLF001",  # Private member access — tests may need to verify internal state
   "E501",    # Line too long — test assertions can be verbose
   "S105",    # Hardcoded password in variable — tests use fake credentials
+  "ARG001",  # Unused function argument — pytest fixtures may appear unused
+  "ARG002",  # Unused method argument — same as above
   "S106",    # Hardcoded password in function arg — same as above
   "INP001",  # Missing __init__.py — test dirs must not have __init__.py per hw1
   "PLC0415", # Import not at top of file — tests may import inside functions
-  "D401",    # Imperative mood — fixture docstrings
-  "F841",    # Unused variable — intentional in try/except
-  "S110",    # try/except/pass — expected in error tests
-]
-# Trello implementation: mirrors Trello API which uses camelCase
-"components/trello_client_impl/src/**/*.py" = [
-  "A002",    # id shadows builtin — Trello API uses id
-  "D102",    # Missing method docstring — interface impl
-  "D107",    # Missing __init__ docstring — data classes
-  "E501",    # Line too long — error messages
-  "FBT001",  # Boolean positional — matches Client interface
-  "FBT002",  # Boolean default — matches Client interface
-  "N803",    # Argument lowercase — Trello API uses camelCase
-  "PTH109",  # os.getcwd — minimal change
-  "PTH113",  # os.path.isfile — minimal change
-  "PTH118",  # os.path.join — minimal change
-  "PTH123",  # open — minimal change
-  "PLR0913", # Too many arguments — Trello Card has many fields
-  "SIM113",  # enumerate — count loop is intentional
-  "TRY003",  # Long exception message — user-facing
 ]
 # Pytest conftest: hooks and fixtures
 "conftest.py" = [
@@ -97,6 +63,7 @@ strict = true
 explicit_package_bases = true  # Required for src layout
 mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src"]
 ignore_missing_imports = false
+warn_unused_ignores = false
 show_error_codes = true
 
 [tool.pytest.ini_options]
