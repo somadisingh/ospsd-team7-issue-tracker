@@ -35,7 +35,9 @@ class TestIssueAbstractClass:
         assert hasattr(Issue, "is_complete")
         assert isinstance(Issue.is_complete, property)
 
-    def test_concrete_issue_implementation(self, sample_issue_data: dict[str, Any]) -> None:
+    def test_concrete_issue_implementation(
+        self, sample_issue_data: dict[str, Any]
+    ) -> None:
         """Test a concrete Issue implementation."""
 
         class ConcreteIssue(Issue):

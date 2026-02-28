@@ -92,9 +92,7 @@ class TestTrelloMemberInterfaceImplementation:
 
     def test_trello_member_implements_member_interface(self) -> None:
         """Test that TrelloMember implements all Member properties."""
-        member = TrelloMember(
-            id="member_id", username="testuser", is_board_member=True
-        )
+        member = TrelloMember(id="member_id", username="testuser", is_board_member=True)
         assert hasattr(member, "id")
         assert hasattr(member, "username")
         assert hasattr(member, "is_board_member")
@@ -105,7 +103,10 @@ class TestClientWorkflows:
     """Test multi-step client workflows with mocked requests."""
 
     def test_get_and_mark_complete_workflow(
-        self, integration_env_setup: Any, mocker: MockerFixture, mock_card_response: dict[str, Any]
+        self,
+        integration_env_setup: Any,
+        mocker: MockerFixture,
+        mock_card_response: dict[str, Any],
     ) -> None:
         """Test workflow: get issue then mark it complete."""
         mock_response = MagicMock()
@@ -154,7 +155,10 @@ class TestClientWorkflows:
         assert isinstance(issues, list)
 
     def test_get_card_members_workflow(
-        self, integration_env_setup: Any, mocker: MockerFixture, mock_member_response: dict[str, Any]
+        self,
+        integration_env_setup: Any,
+        mocker: MockerFixture,
+        mock_member_response: dict[str, Any],
     ) -> None:
         """Test workflow: get card and its members."""
         mock_response = MagicMock()
@@ -187,7 +191,10 @@ class TestFactoryFunctions:
         assert isinstance(client, TrelloClient)
 
     def test_client_from_factory_is_usable(
-        self, integration_env_setup: Any, mocker: MockerFixture, mock_card_response: dict[str, Any]
+        self,
+        integration_env_setup: Any,
+        mocker: MockerFixture,
+        mock_card_response: dict[str, Any],
     ) -> None:
         """Test that client from factory can perform operations."""
         mock_response = MagicMock()

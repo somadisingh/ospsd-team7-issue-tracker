@@ -22,14 +22,18 @@ from trello_client_impl.trello_impl import TrelloClient
 class TestE2EClientInitialization:
     """Test real client initialization."""
 
-    def test_client_initialization_with_credentials(self, e2e_skip_if_no_credentials: None) -> None:
+    def test_client_initialization_with_credentials(
+        self, e2e_skip_if_no_credentials: None
+    ) -> None:
         """Test that TrelloClient initializes with valid credentials."""
         client = TrelloClient()
         assert client is not None
         assert client.api_key
         assert client.token is not None
 
-    def test_client_can_build_api_queries(self, e2e_skip_if_no_credentials: None) -> None:
+    def test_client_can_build_api_queries(
+        self, e2e_skip_if_no_credentials: None
+    ) -> None:
         """Test that client can build valid API query parameters."""
         client = TrelloClient()
         query = client._query()
@@ -121,7 +125,9 @@ class TestE2EErrorHandling:
 class TestE2EInterfaceCompliance:
     """Test that client complies with the Client interface in real scenarios."""
 
-    def test_client_interface_compliance(self, e2e_skip_if_no_credentials: None) -> None:
+    def test_client_interface_compliance(
+        self, e2e_skip_if_no_credentials: None
+    ) -> None:
         """Test that TrelloClient implements all required methods."""
         client = TrelloClient()
 

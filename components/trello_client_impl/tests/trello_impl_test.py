@@ -103,9 +103,7 @@ class TestTrelloMember:
 
     def test_trello_member_optional_fields(self) -> None:
         """Test TrelloMember with optional fields."""
-        member = TrelloMember(
-            id="member_123", username=None, is_board_member=None
-        )
+        member = TrelloMember(id="member_123", username=None, is_board_member=None)
         assert member.id == "member_123"
         assert member.username is None
         assert member.is_board_member is None
@@ -141,7 +139,9 @@ class TestTrelloClient:
         client = TrelloClient()
         assert client.token == "test_token"
 
-    def test_trello_client_token_raises_when_missing(self, mocker: MockerFixture) -> None:
+    def test_trello_client_token_raises_when_missing(
+        self, mocker: MockerFixture
+    ) -> None:
         """Test TrelloClient.token raises ValueError when token not set."""
         mocker.patch.dict(
             "os.environ",
@@ -167,7 +167,10 @@ class TestTrelloClient:
         assert query["token"] == "test_token"
 
     def test_trello_client_get_issue(
-        self, client_with_env: TrelloClient, mocker: MockerFixture, mock_card_response: dict[str, Any]
+        self,
+        client_with_env: TrelloClient,
+        mocker: MockerFixture,
+        mock_card_response: dict[str, Any],
     ) -> None:
         """Test TrelloClient.get_issue with mocked API call."""
         mock_response = MagicMock()
@@ -272,7 +275,10 @@ class TestTrelloClient:
         assert result is True
 
     def test_trello_client_get_board(
-        self, client_with_env: TrelloClient, mocker: MockerFixture, mock_board_response: dict[str, str]
+        self,
+        client_with_env: TrelloClient,
+        mocker: MockerFixture,
+        mock_board_response: dict[str, str],
     ) -> None:
         """Test TrelloClient.get_board with mocked API call."""
         mock_response = MagicMock()
@@ -290,7 +296,10 @@ class TestTrelloClient:
         assert board is not None
 
     def test_trello_client_get_members_on_card(
-        self, client_with_env: TrelloClient, mocker: MockerFixture, mock_member_response: dict[str, Any]
+        self,
+        client_with_env: TrelloClient,
+        mocker: MockerFixture,
+        mock_member_response: dict[str, Any],
     ) -> None:
         """Test TrelloClient.get_members_on_card with mocked API call."""
         mock_response = MagicMock()
@@ -308,7 +317,10 @@ class TestTrelloClient:
         assert isinstance(members, list)
 
     def test_trello_client_get_issues(
-        self, client_with_env: TrelloClient, mocker: MockerFixture, mock_card_response: dict[str, Any]
+        self,
+        client_with_env: TrelloClient,
+        mocker: MockerFixture,
+        mock_card_response: dict[str, Any],
     ) -> None:
         """Test TrelloClient.get_issues returns an iterator."""
         mock_response = MagicMock()
@@ -327,7 +339,10 @@ class TestTrelloClient:
         assert hasattr(issues, "__iter__")
 
     def test_trello_client_get_issues_uses_boards_when_no_default_board(
-        self, client_with_env: TrelloClient, mocker: MockerFixture, mock_card_response: dict[str, Any]
+        self,
+        client_with_env: TrelloClient,
+        mocker: MockerFixture,
+        mock_card_response: dict[str, Any],
     ) -> None:
         """Test get_issues fetches boards when _default_board_id is not set."""
         mock_response = MagicMock()

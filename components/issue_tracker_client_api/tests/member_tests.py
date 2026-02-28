@@ -35,7 +35,9 @@ class TestMemberAbstractClass:
         assert hasattr(Member, "is_board_member")
         assert isinstance(Member.is_board_member, property)
 
-    def test_concrete_member_implementation(self, sample_member_data: dict[str, Any]) -> None:
+    def test_concrete_member_implementation(
+        self, sample_member_data: dict[str, Any]
+    ) -> None:
         """Test a concrete Member implementation."""
 
         class ConcreteMember(Member):

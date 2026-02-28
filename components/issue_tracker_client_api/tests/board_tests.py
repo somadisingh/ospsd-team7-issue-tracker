@@ -30,7 +30,9 @@ class TestBoardAbstractClass:
         assert hasattr(Board, "name")
         assert isinstance(Board.name, property)
 
-    def test_concrete_board_implementation(self, sample_board_data: dict[str, Any]) -> None:
+    def test_concrete_board_implementation(
+        self, sample_board_data: dict[str, Any]
+    ) -> None:
         """Test a concrete Board implementation."""
 
         class ConcreteBoard(Board):
