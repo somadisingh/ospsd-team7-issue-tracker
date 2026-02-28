@@ -25,11 +25,6 @@ class Client(ABC):
         raise NotImplementedError("Subclasses must implement delete_issue")
 
     @abstractmethod
-    def mark_complete(self, issue_id: str) -> bool:
-        """Mark an issue as complete."""
-        raise NotImplementedError("Subclasses must implement mark_complete")
-
-    @abstractmethod
     def update_status(self, issue_id: str, status: str) -> bool:
         """Update an issue's status (e.g. 'todo', 'in_progress', 'complete')."""
         raise NotImplementedError("Subclasses must implement update_status")

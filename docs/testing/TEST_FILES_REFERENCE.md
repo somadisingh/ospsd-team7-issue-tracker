@@ -104,9 +104,8 @@ Quick reference guide for all test files and their contents.
   - `test_trello_client_query_method` - Query parameter building with credentials
   - `test_trello_client_get_issue` - get_issue with mocked requests
   - `test_trello_client_delete_issue` - delete_issue with mocked requests
-  - `test_trello_client_mark_complete` - mark_complete with mocked requests
-  - `test_trello_client_update_status_complete` - update_status to complete
-  - `test_trello_client_update_status_in_progress` - update_status to in_progress
+  - `test_trello_client_update_status_moves_card_to_list` - update_status moves card when status_list_ids set
+  - `test_trello_client_update_status_unknown_status_no_op` - update_status no-op for unknown status
   - `test_trello_client_assign_issue` - assign_issue with mocked requests
   - `test_trello_client_get_board` - get_board with mocked requests
   - `test_trello_client_get_members_on_card` - get_members_on_card with mocked requests
@@ -168,7 +167,7 @@ Quick reference guide for all test files and their contents.
   - `test_trello_member_is_instance_of_member` - TrelloMember is a Member
   - `test_trello_member_implements_member_interface` - Interface implemented
 - `TestClientWorkflows` - Multi-step workflows with mocked requests
-  - `test_get_and_mark_complete_workflow` - Get issue then mark complete
+  - `test_get_issue_and_update_status_workflow` - Get issue then update status
   - `test_get_board_and_cards_workflow` - Get board then get cards
   - `test_get_card_members_workflow` - Get card members
 - `TestFactoryFunctions` - Factory function integration tests

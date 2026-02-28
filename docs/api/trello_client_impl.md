@@ -17,8 +17,7 @@ Implements `issue_tracker_client_api.Client`.
 | `get_issue(issue_id: str) -> Issue` | GET /cards/{id} | Single card |
 | `create_issue(title, list_id, description) -> Issue` | POST /cards | Create card in list |
 | `delete_issue(issue_id: str) -> bool` | PUT (archive) + DEL /cards/{id} | Archive then delete |
-| `mark_complete(issue_id: str) -> bool` | PUT /cards/{id} | Set dueComplete |
-| `update_status(issue_id, status) -> bool` | PUT /cards/{id} | Map status to dueComplete |
+| `update_status(issue_id, status) -> bool` | PUT /cards/{id} | Move card to list for status (via idList) |
 | `assign_issue(issue_id, member_id) -> bool` | POST /cards/{id}/idMembers | Add member to card |
 | `get_issues(max_issues: int = 10) -> Iterator[Issue]` | GET /boards/{id}/cards | Cards on board |
 

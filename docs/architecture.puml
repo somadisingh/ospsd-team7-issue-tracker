@@ -20,7 +20,6 @@ interface "I ClientFactory" as ClientFactory {
 interface "I Client" as Client {
   get_issue(issue_id: str): Issue
   delete_issue(issue_id: str): bool
-  mark_complete(issue_id: str): bool
   update_status(issue_id: str, status: str): bool
   get_issues(max_issues: int): Iterator[Issue]
   get_board(board_id: str): Board
@@ -79,7 +78,6 @@ class "C TrelloMember" as TrelloMember {
 class "C TrelloClient" as TrelloClient {
   get_issue(issue_id: str): Issue
   delete_issue(issue_id: str): bool
-  mark_complete(issue_id: str): bool
   update_status(issue_id: str, status: str): bool
   get_issues(max_issues: int): Iterator[Issue]
   get_board(board_id: str): Board

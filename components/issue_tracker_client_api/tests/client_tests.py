@@ -38,9 +38,6 @@ class _ConcreteClient(Client):
     def delete_issue(self, issue_id: str) -> bool:
         return True
 
-    def mark_complete(self, issue_id: str) -> bool:
-        return True
-
     def update_status(self, issue_id: str, status: str) -> bool:
         return True
 
@@ -90,7 +87,6 @@ class TestClientAbstractClass:
         required_methods = [
             "get_issue",
             "delete_issue",
-            "mark_complete",
             "update_status",
             "get_issues",
             "get_board",

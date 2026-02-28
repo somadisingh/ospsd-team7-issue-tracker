@@ -141,7 +141,6 @@ class TestE2EInterfaceCompliance:
         required_methods = [
             "get_issue",
             "delete_issue",
-            "mark_complete",
             "update_status",
             "get_issues",
             "get_board",

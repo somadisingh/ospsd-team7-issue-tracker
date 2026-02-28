@@ -35,7 +35,6 @@ class TestClientInterfaceImplementation:
         required_methods = [
             "get_issue",
             "delete_issue",
-            "mark_complete",
             "update_status",
             "get_issues",
             "get_board",
@@ -123,13 +122,13 @@ class TestTrelloMemberInterfaceImplementation:
 class TestClientWorkflows:
     """Test multi-step client workflows with mocked requests."""
 
-    def test_get_and_mark_complete_workflow(
+    def test_get_issue_and_update_status_workflow(
         self,
         integration_credentials: dict[str, str],
         mocker: MockerFixture,
         mock_card_response: dict[str, Any],
     ) -> None:
-        """Test workflow: get issue then mark it complete."""
+        """Test workflow: get issue then update its status."""
         mock_response = MagicMock()
         mock_response.json.return_value = mock_card_response
         mock_request = mocker.patch(
@@ -137,14 +136,17 @@ class TestClientWorkflows:
             return_value=mock_response,
         )
 
-        client = TrelloClient(**integration_credentials)
+        client = TrelloClient(
+            **integration_credentials,
+            status_list_ids={"complete": "list_done_id"},
+        )
 
         issue = client.get_issue("card_id")
         assert issue is not None
 
-        result = client.mark_complete("card_id")
+        result = client.update_status("card_id", "complete")
         assert result is True
-        assert mock_request.call_count >= 1
+        assert mock_request.call_count >= 2
 
     def test_get_board_and_cards_workflow(
         self,

@@ -52,7 +52,6 @@ Implements `issue_tracker_client_api.Client`.
 
 - **`get_issue(issue_id: str) -> Issue`** – Single card (GET /cards/{id}).
 - **`delete_issue(issue_id: str) -> bool`** – Archive then delete (PUT + DEL /cards/{id}).
-- **`mark_complete(issue_id: str) -> bool`** – Set dueComplete (PUT /cards/{id}).
 - **`update_status(issue_id, status) -> bool`** – Map status to dueComplete.
 - **`assign_issue(issue_id, member_id) -> bool`** – Add member (POST /cards/{id}/idMembers).
 - **`get_issues(max_issues: int = 10) -> Iterator[Issue]`** – Cards on board (GET /boards/{id}/cards).

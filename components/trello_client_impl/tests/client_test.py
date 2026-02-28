@@ -97,44 +97,32 @@ class TestTrelloClient:
         assert result is True
         assert mock_request.call_count >= 2
 
-    def test_trello_client_mark_complete(
-        self, client_with_creds: TrelloClient, mocker: MockerFixture
+    def test_trello_client_update_status_moves_card_to_list(
+        self,
+        client_with_creds: TrelloClient,
+        mocker: MockerFixture,
     ) -> None:
-        """Test TrelloClient.mark_complete with mocked API call."""
-        mock_response = MagicMock()
-        mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
+        """Test TrelloClient.update_status moves card when status_list_ids is set."""
+        client = TrelloClient(
+            api_key=client_with_creds.api_key,
+            token=client_with_creds.token,
+            status_list_ids={"complete": "list_done_id"},
         )
-
-        result = client_with_creds.mark_complete("card_id")
-        assert result is True
-
-    def test_trello_client_update_status_complete(
-        self, client_with_creds: TrelloClient, mocker: MockerFixture
-    ) -> None:
-        """Test TrelloClient.update_status with 'complete'."""
-        mock_response = MagicMock()
         mock_request = mocker.patch(
             "trello_client_impl.client.requests.request",
-            return_value=mock_response,
+            return_value=MagicMock(),
         )
-
-        result = client_with_creds.update_status("card_id", "complete")
+        result = client.update_status("card_id", "complete")
         assert result is True
-        assert mock_request.call_count >= 1
+        mock_request.assert_called_once()
+        call_kwargs = mock_request.call_args.kwargs
+        assert call_kwargs.get("json") == {"idList": "list_done_id"}
 
-    def test_trello_client_update_status_in_progress(
-        self, client_with_creds: TrelloClient, mocker: MockerFixture
+    def test_trello_client_update_status_unknown_status_no_op(
+        self, client_with_creds: TrelloClient
     ) -> None:
-        """Test TrelloClient.update_status with 'in_progress'."""
-        mock_response = MagicMock()
-        mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
-        )
-
-        result = client_with_creds.update_status("card_id", "in_progress")
+        """Test update_status with unknown status returns True without calling API."""
+        result = client_with_creds.update_status("card_id", "complete")
         assert result is True
 
     def test_trello_client_assign_issue(

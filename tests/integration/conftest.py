@@ -37,7 +37,6 @@ def mock_client_implementation() -> MagicMock:
     mock_client = MagicMock()
     mock_client.get_issue = MagicMock()
     mock_client.delete_issue = MagicMock(return_value=True)
-    mock_client.mark_complete = MagicMock(return_value=True)
     mock_client.update_status = MagicMock(return_value=True)
     mock_client.get_issues = MagicMock()
     mock_client.get_board = MagicMock()
