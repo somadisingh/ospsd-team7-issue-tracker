@@ -24,6 +24,12 @@ class Issue(ABC):
         """Return whether the issue is complete."""
         raise NotImplementedError("Subclasses must implement is_complete")
 
+    @property
+    @abstractmethod
+    def list_id(self) -> str:
+        """Return the ID of the list this issue belongs to."""
+        raise NotImplementedError("Subclasses must implement list_id")
+
 
 def get_issue(issue_id: str) -> Issue:
     """Return an issue by its ID.

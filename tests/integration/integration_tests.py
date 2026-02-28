@@ -36,11 +36,17 @@ class TestClientInterfaceImplementation:
             "get_issue",
             "delete_issue",
             "update_status",
-            "get_issues",
             "get_board",
             "get_boards",
+            "create_board",
+            "add_member_to_board",
+            "get_list",
             "get_lists",
-            "get_members_on_card",
+            "get_issues_in_list",
+            "create_list",
+            "update_list",
+            "delete_list",
+            "get_members_on_issue",
             "assign_issue",
             "create_issue",
         ]
@@ -126,11 +132,11 @@ class TestClientWorkflows:
         self,
         integration_credentials: dict[str, str],
         mocker: MockerFixture,
-        mock_card_response: dict[str, Any],
+        mock_issue_response: dict[str, Any],
     ) -> None:
         """Test workflow: get issue then update its status."""
         mock_response = MagicMock()
-        mock_response.json.return_value = mock_card_response
+        mock_response.json.return_value = mock_issue_response
         mock_request = mocker.patch(
             "trello_client_impl.client.requests.request",
             return_value=mock_response,
@@ -141,23 +147,28 @@ class TestClientWorkflows:
             status_list_ids={"complete": "list_done_id"},
         )
 
-        issue = client.get_issue("card_id")
+        issue = client.get_issue("issue_id")
         assert issue is not None
 
-        result = client.update_status("card_id", "complete")
+        result = client.update_status("issue_id", "complete")
         assert result is True
         assert mock_request.call_count >= 2
 
-    def test_get_board_and_cards_workflow(
+    def test_get_board_and_lists_and_issues_workflow(
         self,
         integration_credentials: dict[str, str],
         mocker: MockerFixture,
         mock_board_response: dict[str, Any],
-        mock_card_response: dict[str, Any],
+        mock_list_response: dict[str, Any],
+        mock_issue_response: dict[str, Any],
     ) -> None:
-        """Test workflow: get board then get its cards."""
+        """Test workflow: get board, get lists, then get issues in a list."""
         mock_response = MagicMock()
-        mock_response.json.side_effect = [mock_board_response, [mock_card_response]]
+        mock_response.json.side_effect = [
+            mock_board_response,
+            [mock_list_response],
+            [mock_issue_response],
+        ]
         mocker.patch(
             "trello_client_impl.client.requests.request",
             return_value=mock_response,
@@ -169,16 +180,19 @@ class TestClientWorkflows:
         assert board is not None
         assert isinstance(board, Board)
 
-        issues = list(client.get_issues(max_issues=10))
-        assert isinstance(issues, list)
+        lists = list(client.get_lists("board_id"))
+        assert isinstance(lists, list)
+        if lists:
+            issues = list(client.get_issues_in_list(lists[0].id, max_issues=10))
+            assert isinstance(issues, list)
 
-    def test_get_card_members_workflow(
+    def test_get_issue_members_workflow(
         self,
         integration_credentials: dict[str, str],
         mocker: MockerFixture,
         mock_member_response: dict[str, Any],
     ) -> None:
-        """Test workflow: get card and its members."""
+        """Test workflow: get issue and its members."""
         mock_response = MagicMock()
         mock_response.json.return_value = [mock_member_response]
         mocker.patch(
@@ -188,7 +202,7 @@ class TestClientWorkflows:
 
         client = TrelloClient(**integration_credentials)
 
-        members = client.get_members_on_card("card_id")
+        members = client.get_members_on_issue("issue_id")
         assert isinstance(members, list)
         assert len(members) > 0
         assert isinstance(members[0], Member)
@@ -210,11 +224,11 @@ class TestFactoryFunctions:
         self,
         integration_credentials: dict[str, str],
         mocker: MockerFixture,
-        mock_card_response: dict[str, Any],
+        mock_issue_response: dict[str, Any],
     ) -> None:
         """Test that client from factory can perform operations."""
         mock_response = MagicMock()
-        mock_response.json.return_value = mock_card_response
+        mock_response.json.return_value = mock_issue_response
         mocker.patch(
             "trello_client_impl.client.requests.request",
             return_value=mock_response,

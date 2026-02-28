@@ -104,13 +104,12 @@ Quick reference guide for all test files and their contents.
   - `test_trello_client_query_method` - Query parameter building with credentials
   - `test_trello_client_get_issue` - get_issue with mocked requests
   - `test_trello_client_delete_issue` - delete_issue with mocked requests
-  - `test_trello_client_update_status_moves_card_to_list` - update_status moves card when status_list_ids set
+  - `test_trello_client_update_status_moves_issue_to_list` - update_status moves issue when status_list_ids set
   - `test_trello_client_update_status_unknown_status_no_op` - update_status no-op for unknown status
   - `test_trello_client_assign_issue` - assign_issue with mocked requests
   - `test_trello_client_get_board` - get_board with mocked requests
-  - `test_trello_client_get_members_on_card` - get_members_on_card with mocked requests
-  - `test_trello_client_get_issues` - get_issues returns iterator
-  - `test_trello_client_get_issues_uses_boards_when_no_default_board` - Fallback board fetching
+  - `test_trello_client_get_members_on_issue` - get_members_on_issue with mocked requests
+  - `test_trello_client_get_issues_in_list` - get_issues_in_list returns issues in list
 - `TestGetClientImpl` - Factory function tests
   - `test_get_client_impl_returns_trello_client` - Factory returns TrelloClient instance
   - `test_get_client_impl_with_interactive_flag` - Interactive flag passed through factory
@@ -127,7 +126,7 @@ Quick reference guide for all test files and their contents.
 
 **Test Classes:**
 - `TestTrelloCard` - TrelloCard (Issue implementation) tests
-  - `test_trello_card_initialization` - Card creation and properties
+  - `test_trello_issue_initialization` - Issue creation and properties
   - `test_trello_card_from_api` - Static factory method from API response
   - `test_trello_card_properties` - Property access (id, title, is_complete, desc, due, id_board, id_list)
 
@@ -168,8 +167,8 @@ Quick reference guide for all test files and their contents.
   - `test_trello_member_implements_member_interface` - Interface implemented
 - `TestClientWorkflows` - Multi-step workflows with mocked requests
   - `test_get_issue_and_update_status_workflow` - Get issue then update status
-  - `test_get_board_and_cards_workflow` - Get board then get cards
-  - `test_get_card_members_workflow` - Get card members
+  - `test_get_board_and_lists_and_issues_workflow` - Get board then get lists and issues in list
+  - `test_get_issue_members_workflow` - Get members on issue
 - `TestFactoryFunctions` - Factory function integration tests
   - `test_get_client_impl_returns_proper_client` - Factory returns working client
   - `test_client_from_factory_is_usable` - Client performs operations
@@ -191,10 +190,10 @@ Quick reference guide for all test files and their contents.
 - `TestE2EClientOperations` - Real API operations
   - `test_get_board_from_api` - Fetch board from real API
   - `test_list_boards_from_api` - List user's boards from real API
-  - `test_get_issues_workflow` - Get issues from real API
+  - `test_get_issues_in_list_workflow` - Get issues in list from real API
 - `TestE2EErrorHandling` - Real error scenarios
   - `test_invalid_board_id_handling` - Invalid board ID handling
-  - `test_invalid_card_id_handling` - Invalid card ID handling
+  - `test_invalid_issue_id_handling` - Invalid issue ID handling
 - `TestE2EInterfaceCompliance` - Interface compliance to real API
   - `test_client_interface_compliance` - All methods present and callable
 - `TestE2EAuthenticationFailure` - Authentication error handling

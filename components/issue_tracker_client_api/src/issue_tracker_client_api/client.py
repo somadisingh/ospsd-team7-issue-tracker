@@ -30,11 +30,6 @@ class Client(ABC):
         raise NotImplementedError("Subclasses must implement update_status")
 
     @abstractmethod
-    def get_issues(self, max_issues: int = 10) -> Iterator[Issue]:
-        """Return an iterator of issues, up to max_issues."""
-        raise NotImplementedError("Subclasses must implement get_issues")
-
-    @abstractmethod
     def get_board(self, board_id: str) -> Board:
         """Return a single board by its ID."""
         raise NotImplementedError("Subclasses must implement get_board")
@@ -45,14 +40,53 @@ class Client(ABC):
         raise NotImplementedError("Subclasses must implement get_boards")
 
     @abstractmethod
+    def create_board(self, name: str) -> Board:
+        """Create a new board and return it."""
+        raise NotImplementedError("Subclasses must implement create_board")
+
+    @abstractmethod
+    def add_member_to_board(self, board_id: str, member_id: str) -> Member:
+        """Add an existing member to the board and return the member.
+        Members are existing users (e.g. Trello accounts); this adds them to the board.
+        """
+        raise NotImplementedError("Subclasses must implement add_member_to_board")
+
+    @abstractmethod
+    def get_list(self, list_id: str) -> List:
+        """Return a single list by its ID."""
+        raise NotImplementedError("Subclasses must implement get_list")
+
+    @abstractmethod
     def get_lists(self, board_id: str) -> Iterator[List]:
         """Return an iterator of lists on the board."""
         raise NotImplementedError("Subclasses must implement get_lists")
 
     @abstractmethod
-    def get_members_on_card(self, issue_id: str) -> list[Member]:
+    def get_issues_in_list(
+        self, list_id: str, max_issues: int = 100
+    ) -> Iterator[Issue]:
+        """Return an iterator of issues in the given list."""
+        raise NotImplementedError("Subclasses must implement get_issues_in_list")
+
+    @abstractmethod
+    def create_list(self, board_id: str, name: str) -> List:
+        """Create a new list on the board (e.g. a status column)."""
+        raise NotImplementedError("Subclasses must implement create_list")
+
+    @abstractmethod
+    def update_list(self, list_id: str, name: str) -> List:
+        """Update a list's name (e.g. rename a status column)."""
+        raise NotImplementedError("Subclasses must implement update_list")
+
+    @abstractmethod
+    def delete_list(self, list_id: str) -> bool:
+        """Delete (archive) a list. Updates available statuses on the board."""
+        raise NotImplementedError("Subclasses must implement delete_list")
+
+    @abstractmethod
+    def get_members_on_issue(self, issue_id: str) -> list[Member]:
         """Return members assigned to the issue."""
-        raise NotImplementedError("Subclasses must implement get_members_on_card")
+        raise NotImplementedError("Subclasses must implement get_members_on_issue")
 
     @abstractmethod
     def assign_issue(self, issue_id: str, member_id: str) -> bool:

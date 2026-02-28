@@ -31,16 +31,20 @@ class TrelloCard(Issue):
         is_complete: bool = False,
         desc: str | None = None,
         due: str | None = None,
-        id_board: str | None = None,
-        id_list: str | None = None,
+        board_id: str | None = None,
+        list_id: str = "",
     ) -> None:
         self._id = id
         self._title = title
         self._is_complete = is_complete
         self._desc = desc
         self._due = due
-        self._id_board = id_board
-        self._id_list = id_list
+        self._board_id = board_id
+        self._list_id = list_id or ""
+
+    @property
+    def is_complete(self) -> bool:
+        return self._is_complete
 
     @property
     def id(self) -> str:
@@ -51,10 +55,6 @@ class TrelloCard(Issue):
         return self._title
 
     @property
-    def is_complete(self) -> bool:
-        return self._is_complete
-
-    @property
     def desc(self) -> str | None:
         return self._desc
 
@@ -63,24 +63,21 @@ class TrelloCard(Issue):
         return self._due
 
     @property
-    def id_board(self) -> str | None:
-        return self._id_board
+    def board_id(self) -> str | None:
+        return self._board_id
 
     @property
-    def id_list(self) -> str | None:
-        return self._id_list
+    def list_id(self) -> str:
+        return self._list_id
 
     @classmethod
     def from_api(cls, card: _TrelloCardResponse) -> "TrelloCard":
         """Build Card from API card object."""
-        due_complete = bool(card.get("dueComplete", False))
         return cls(
             id=card["id"],
             title=card.get("name", ""),
-            is_complete=due_complete,
             desc=card.get("desc") or None,
             due=card.get("due"),
-            id_board=card.get("idBoard"),
-            id_list=card.get("idList"),
-            id_members=card.get("idMembers", []),
+            board_id=card.get("idBoard"),
+            list_id=card.get("idList"),
         )

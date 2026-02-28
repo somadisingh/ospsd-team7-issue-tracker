@@ -30,6 +30,11 @@ class TestListAbstractClass:
         assert hasattr(List, "name")
         assert isinstance(List.name, property)
 
+    def test_list_has_board_id_property(self) -> None:
+        """Test that List has a board_id property."""
+        assert hasattr(List, "board_id")
+        assert isinstance(List.board_id, property)
+
     def test_concrete_list_implementation(
         self, sample_list_data: dict[str, Any]
     ) -> None:
@@ -38,9 +43,12 @@ class TestListAbstractClass:
         class ConcreteList(List):
             """Concrete implementation of List for testing."""
 
-            def __init__(self, id: str, name: str) -> None:
+            def __init__(
+                self, id: str, name: str, *, board_id: str = ""
+            ) -> None:
                 self._id = id
                 self._name = name
+                self._board_id = board_id
 
             @property
             def id(self) -> str:
@@ -50,11 +58,18 @@ class TestListAbstractClass:
             def name(self) -> str:
                 return self._name
 
+            @property
+            def board_id(self) -> str:
+                return self._board_id
+
         list_obj = ConcreteList(
-            id=sample_list_data["id"], name=sample_list_data["name"]
+            id=sample_list_data["id"],
+            name=sample_list_data["name"],
+            board_id=sample_list_data["board_id"],
         )
         assert list_obj.id == sample_list_data["id"]
         assert list_obj.name == sample_list_data["name"]
+        assert list_obj.board_id == sample_list_data["board_id"]
 
 
 @pytest.mark.unit

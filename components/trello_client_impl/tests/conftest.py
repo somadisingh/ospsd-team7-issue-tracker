@@ -43,6 +43,12 @@ def mock_card_response() -> dict[str, Any]:
 
 
 @pytest.fixture
+def mock_issue_response(mock_card_response: dict[str, Any]) -> dict[str, Any]:
+    """Alias for mock_card_response for tests that use issue terminology."""
+    return mock_card_response
+
+
+@pytest.fixture
 def mock_board_response() -> dict[str, str]:
     """Provide a mock Trello board API response."""
     return {
@@ -69,6 +75,7 @@ def mock_list_response() -> dict[str, Any]:
     return {
         "id": "test_list_id",
         "name": "To Do",
+        "idBoard": "test_board_id",
     }
 
 
@@ -94,13 +101,17 @@ def _patch_from_api_methods(mocker):
             is_complete=bool(card.get("dueComplete", False)),
             desc=card.get("desc"),
             due=card.get("due"),
-            id_board=card.get("idBoard"),
-            id_list=card.get("idList"),
+            board_id=card.get("idBoard"),
+            list_id=card.get("idList") or "",
         )
 
     mocker.patch.object(TrelloCard, "from_api", classmethod(card_from_api))
 
     def list_from_api(cls, lst: dict[str, Any]):
-        return TrelloList(id=lst["id"], name=lst.get("name", ""))
+        return TrelloList(
+            id=lst["id"],
+            name=lst.get("name", ""),
+            board_id=lst.get("idBoard", ""),
+        )
 
     mocker.patch.object(TrelloList, "from_api", classmethod(list_from_api))

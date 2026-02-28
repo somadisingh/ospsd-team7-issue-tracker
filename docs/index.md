@@ -25,10 +25,10 @@ import trello_client_impl
 from issue_tracker_client_api import get_client, Client
 
 client: Client = get_client(interactive=False)
-for issue in client.get_issues(max_issues=5):
-    print(issue.title)
 for board in client.get_boards():
-    print(board.name)
+    for lst in client.get_lists(board.id):
+        for issue in client.get_issues_in_list(lst.id, max_issues=100):
+            print(issue.title)
 ```
 
 ## Project Structure

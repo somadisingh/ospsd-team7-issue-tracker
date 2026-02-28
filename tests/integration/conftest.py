@@ -38,23 +38,29 @@ def mock_client_implementation() -> MagicMock:
     mock_client.get_issue = MagicMock()
     mock_client.delete_issue = MagicMock(return_value=True)
     mock_client.update_status = MagicMock(return_value=True)
-    mock_client.get_issues = MagicMock()
     mock_client.get_board = MagicMock()
     mock_client.get_boards = MagicMock()
+    mock_client.create_board = MagicMock()
+    mock_client.add_member_to_board = MagicMock()
+    mock_client.get_list = MagicMock()
     mock_client.get_lists = MagicMock()
-    mock_client.get_members_on_card = MagicMock()
+    mock_client.get_issues_in_list = MagicMock()
+    mock_client.create_list = MagicMock()
+    mock_client.update_list = MagicMock()
+    mock_client.delete_list = MagicMock(return_value=True)
+    mock_client.get_members_on_issue = MagicMock()
     mock_client.assign_issue = MagicMock(return_value=True)
     mock_client.create_issue = MagicMock()
     return mock_client
 
 
 @pytest.fixture
-def mock_card_response() -> dict[str, Any]:
+def mock_issue_response() -> dict[str, Any]:
     """Provide a mock Trello card API response for integration tests."""
     return {
-        "id": "test_card_id",
-        "name": "Test Card",
-        "desc": "Test card description",
+        "id": "test_issue_id",
+        "name": "Test Issue",
+        "desc": "Test issue description",
         "dueComplete": False,
         "due": "2026-02-15T23:59:59.000Z",
         "idBoard": "test_board_id",
@@ -89,6 +95,7 @@ def mock_list_response() -> dict[str, Any]:
     return {
         "id": "test_list_id",
         "name": "To Do",
+        "idBoard": "test_board_id",
     }
 
 
@@ -100,20 +107,23 @@ def _patch_from_api_methods(mocker):
     from trello_client_impl import TrelloCard, TrelloList
 
     def card_from_api(cls, card: dict[str, Any]):
-        # ignore fields not accepted by the constructor
         return TrelloCard(
             id=card["id"],
             title=card.get("name", ""),
             is_complete=bool(card.get("dueComplete", False)),
             desc=card.get("desc"),
             due=card.get("due"),
-            id_board=card.get("idBoard"),
-            id_list=card.get("idList"),
+            board_id=card.get("idBoard"),
+            list_id=card.get("idList") or "",
         )
 
     mocker.patch.object(TrelloCard, "from_api", classmethod(card_from_api))
 
     def list_from_api(cls, lst: dict[str, Any]):
-        return TrelloList(id=lst["id"], name=lst.get("name", ""))
+        return TrelloList(
+            id=lst["id"],
+            name=lst.get("name", ""),
+            board_id=lst.get("idBoard", ""),
+        )
 
     mocker.patch.object(TrelloList, "from_api", classmethod(list_from_api))

@@ -29,7 +29,7 @@ This project is built on the principle of "programming integrated over time." Th
 
 The project is a `uv` workspace containing two primary packages:
 
-1. **`issue_tracker_client_api`**: Defines the abstract `Client` base class (ABC). This is the contract for what actions an issue tracker client can perform (e.g., `get_issues`, `get_board`, `get_boards`, `get_members_on_card`).
+1. **`issue_tracker_client_api`**: Defines the abstract `Client` base class (ABC). This is the contract for what actions an issue tracker client can perform (e.g., `get_issues_in_list`, `get_board`, `get_boards`, `get_members_on_issue`).
 2. **`trello_client_impl`**: Provides the `TrelloClient` class, a concrete implementation that uses the Trello API to perform the actions defined in the `Client` abstraction.
 
 ## Project Structure

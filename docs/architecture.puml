@@ -18,16 +18,22 @@ interface "I ClientFactory" as ClientFactory {
 
 ' Client interface
 interface "I Client" as Client {
-  get_issue(issue_id: str): Issue
-  delete_issue(issue_id: str): bool
-  update_status(issue_id: str, status: str): bool
-  get_issues(max_issues: int): Iterator[Issue]
   get_board(board_id: str): Board
   get_boards(): Iterator[Board]
+  create_board(name: str): Board
+  add_member_to_board(board_id: str, member_id: str): Member
+  create_list(board_id: str, name: str): List
+  get_list(list_id: str): List
   get_lists(board_id: str): Iterator[List]
-  get_members_on_card(issue_id: str): list[Member]
-  assign_issue(issue_id: str, member_id: str): bool
+  update_list(list_id: str, name: str): List
+  delete_list(list_id: str): bool
   create_issue(title: str, list_id: str, description?: str): Issue
+  get_issue(issue_id: str): Issue
+  get_issues_in_list(list_id: str, max_issues: int): Iterator[Issue]
+  update_status(issue_id: str, status: str): bool
+  get_members_on_issue(issue_id: str): list[Member]
+  assign_issue(issue_id: str, member_id: str): bool
+  delete_issue(issue_id: str): bool
 }
 
 ' Concrete factories
@@ -40,6 +46,7 @@ interface "I Issue" as Issue {
   id: str
   title: str
   is_complete: bool
+  list_id: str
 }
 
 interface "I Board" as Board {
@@ -50,6 +57,7 @@ interface "I Board" as Board {
 interface "I List" as List {
   id: str
   name: str
+  board_id: str
 }
 
 interface "I Member" as Member {
@@ -76,16 +84,22 @@ class "C TrelloMember" as TrelloMember {
 }
 
 class "C TrelloClient" as TrelloClient {
-  get_issue(issue_id: str): Issue
-  delete_issue(issue_id: str): bool
-  update_status(issue_id: str, status: str): bool
-  get_issues(max_issues: int): Iterator[Issue]
   get_board(board_id: str): Board
   get_boards(): Iterator[Board]
+  create_board(name: str): Board
+  add_member_to_board(board_id: str, member_id: str): Member
+  create_list(board_id: str, name: str): List
+  get_list(list_id: str): List
   get_lists(board_id: str): Iterator[List]
-  get_members_on_card(issue_id: str): list[Member]
-  assign_issue(issue_id: str, member_id: str): bool
+  update_list(list_id: str, name: str): List
+  delete_list(list_id: str): bool
   create_issue(title: str, list_id: str, description?: str): Issue
+  get_issue(issue_id: str): Issue
+  get_issues_in_list(list_id: str, max_issues: int): Iterator[Issue]
+  update_status(issue_id: str, status: str): bool
+  get_members_on_issue(issue_id: str): list[Member]
+  assign_issue(issue_id: str, member_id: str): bool
+  delete_issue(issue_id: str): bool
 }
 
 ' Relationships
