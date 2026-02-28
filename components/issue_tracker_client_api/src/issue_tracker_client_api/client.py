@@ -47,6 +47,7 @@ class Client(ABC):
     @abstractmethod
     def add_member_to_board(self, board_id: str, member_id: str) -> Member:
         """Add an existing member to the board and return the member.
+
         Members are existing users (e.g. Trello accounts); this adds them to the board.
         """
         raise NotImplementedError("Subclasses must implement add_member_to_board")

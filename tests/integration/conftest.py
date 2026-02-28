@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from pytest_mock import MockerFixture
+from trello_client_impl import TrelloCard, TrelloList
 
 
 @pytest.fixture
@@ -104,8 +105,6 @@ def mock_list_response() -> dict[str, Any]:
 # the default implementations pass extra keyword arguments.
 @pytest.fixture(autouse=True)
 def _patch_from_api_methods(mocker):
-    from trello_client_impl import TrelloCard, TrelloList
-
     def card_from_api(cls, card: dict[str, Any]):
         return TrelloCard(
             id=card["id"],

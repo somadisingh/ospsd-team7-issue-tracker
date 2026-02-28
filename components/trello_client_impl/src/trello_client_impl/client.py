@@ -13,7 +13,7 @@ from issue_tracker_client_api import Board, Client, Issue, List, Member
 
 from .board import TrelloBoard
 from .issue import TrelloCard
-from .list import TrelloList
+from .list import TrelloList, _TrelloListResponse
 from .member import TrelloMember
 
 BASE_URL = "https://api.trello.com/1"
