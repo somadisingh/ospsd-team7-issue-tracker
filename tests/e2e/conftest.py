@@ -10,11 +10,21 @@ import pytest
 
 
 @pytest.fixture
-def e2e_skip_if_no_credentials() -> None:
+def e2e_credentials() -> dict[str, str]:
+    """Provide e2e test credentials from environment."""
+    return {
+        "api_key": os.getenv("TRELLO_API_KEY", ""),
+        "token": os.getenv("TRELLO_TOKEN", ""),
+        "board_id": os.getenv("TRELLO_BOARD_ID", ""),
+    }
+
+
+@pytest.fixture
+def e2e_skip_if_no_credentials(e2e_credentials: dict[str, str]) -> None:
     """Skip e2e tests if Trello credentials are not available."""
-    api_key = os.getenv("TRELLO_API_KEY")
-    token = os.getenv("TRELLO_TOKEN")
-    board_id = os.getenv("TRELLO_BOARD_ID")
+    api_key = e2e_credentials.get("api_key")
+    token = e2e_credentials.get("token")
+    board_id = e2e_credentials.get("board_id")
 
     if not all([api_key, token, board_id]):
         pytest.skip(
@@ -23,10 +33,6 @@ def e2e_skip_if_no_credentials() -> None:
 
 
 @pytest.fixture
-def e2e_client_config() -> dict[str, str]:
-    """Provide e2e test client configuration from environment."""
-    return {
-        "api_key": os.getenv("TRELLO_API_KEY", ""),
-        "token": os.getenv("TRELLO_TOKEN", ""),
-        "board_id": os.getenv("TRELLO_BOARD_ID", ""),
-    }
+def e2e_client_config(e2e_credentials: dict[str, str]) -> dict[str, str]:
+    """Provide e2e test client configuration from credentials."""
+    return e2e_credentials

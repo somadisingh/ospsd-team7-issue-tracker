@@ -3,26 +3,16 @@
 from typing import Any
 
 import pytest
-from pytest_mock import MockerFixture
 
 
 @pytest.fixture
-def mock_requests(mocker: MockerFixture) -> Any:
-    """Provide a mock requests module."""
-    return mocker.patch("trello_client_impl.trello_impl.requests")
-
-
-@pytest.fixture
-def mock_os_environ(mocker: MockerFixture) -> Any:
-    """Provide mocked os.environ."""
-    return mocker.patch.dict(
-        "os.environ",
-        {
-            "TRELLO_API_KEY": "test_api_key",
-            "TRELLO_TOKEN": "test_token",
-            "TRELLO_BOARD_ID": "test_board_id",
-        },
-    )
+def trello_credentials() -> dict[str, str]:
+    """Provide Trello credentials for testing."""
+    return {
+        "api_key": "test_api_key",
+        "token": "test_token",
+        "board_id": "test_board_id",
+    }
 
 
 @pytest.fixture

@@ -26,7 +26,10 @@ The testing framework includes:
      - `member_tests.py` - Member abstract class interface
 
    - `trello_client_impl/tests/`:
-     - `trello_impl_test.py` - TrelloClient, TrelloCard, TrelloBoard, TrelloMember implementations
+     - `board_test.py` - TrelloBoard (Board implementation) tests
+     - `client_test.py` - TrelloClient and factory functions tests
+     - `issue_test.py` - TrelloCard (Issue implementation) tests
+     - `member_test.py` - TrelloMember (Member implementation) tests
 
 ### 2. **Integration Tests** (real dependencies)
    - **Location**: `tests/integration/`
@@ -73,7 +76,10 @@ ospsd-team-07/
 │       ├── src/trello_client_impl/       # Concrete Trello implementation
 │       └── tests/
 │           ├── conftest.py               # Trello test fixtures
-│           └── trello_impl_test.py       # Implementation tests
+│           ├── board_test.py             # TrelloBoard tests
+│           ├── client_test.py            # TrelloClient tests
+│           ├── issue_test.py             # TrelloCard tests
+│           └── member_test.py            # TrelloMember tests
 │
 └── tests/
     ├── integration/
@@ -147,7 +153,10 @@ pytest tests/integration/ -v
 
 ```bash
 pytest components/issue_tracker_client_api/tests/client_tests.py -v
-pytest components/trello_client_impl/tests/trello_impl_test.py -v
+pytest components/trello_client_impl/tests/board_test.py -v
+pytest components/trello_client_impl/tests/client_test.py -v
+pytest components/trello_client_impl/tests/issue_test.py -v
+pytest components/trello_client_impl/tests/member_test.py -v
 ```
 
 ### Run Specific Test Class or Function

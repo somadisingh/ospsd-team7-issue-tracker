@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 from issue_tracker_client_api import Board, Client, Issue, Member
 from pytest_mock import MockerFixture
-from trello_client_impl.trello_impl import (
+from trello_client_impl import (
     TrelloBoard,
     TrelloCard,
     TrelloClient,
@@ -20,17 +20,17 @@ class TestClientInterfaceImplementation:
     """Test that TrelloClient properly implements the Client interface."""
 
     def test_trello_client_is_instance_of_client(
-        self, integration_env_setup: Any, mocker: MockerFixture
+        self, integration_credentials: dict[str, str], mocker: MockerFixture
     ) -> None:
         """Test that TrelloClient is an instance of Client."""
-        client = TrelloClient()
+        client = TrelloClient(**integration_credentials)
         assert isinstance(client, Client)
 
     def test_trello_client_implements_all_methods(
-        self, integration_env_setup: Any, mocker: MockerFixture
+        self, integration_credentials: dict[str, str], mocker: MockerFixture
     ) -> None:
         """Test that TrelloClient implements all required Client methods."""
-        client = TrelloClient()
+        client = TrelloClient(**integration_credentials)
         required_methods = [
             "get_issue",
             "delete_issue",
@@ -104,7 +104,7 @@ class TestClientWorkflows:
 
     def test_get_and_mark_complete_workflow(
         self,
-        integration_env_setup: Any,
+        integration_credentials: dict[str, str],
         mocker: MockerFixture,
         mock_card_response: dict[str, Any],
     ) -> None:
@@ -112,13 +112,11 @@ class TestClientWorkflows:
         mock_response = MagicMock()
         mock_response.json.return_value = mock_card_response
         mock_request = mocker.patch(
-            "trello_client_impl.trello_impl.requests.request",
+            "trello_client_impl.client.requests.request",
             return_value=mock_response,
         )
 
-        client = TrelloClient()
-        client.api_key = "test_key"
-        client._token = "test_token"
+        client = TrelloClient(**integration_credentials)
 
         issue = client.get_issue("card_id")
         assert issue is not None
@@ -129,7 +127,7 @@ class TestClientWorkflows:
 
     def test_get_board_and_cards_workflow(
         self,
-        integration_env_setup: Any,
+        integration_credentials: dict[str, str],
         mocker: MockerFixture,
         mock_board_response: dict[str, Any],
         mock_card_response: dict[str, Any],
@@ -138,14 +136,11 @@ class TestClientWorkflows:
         mock_response = MagicMock()
         mock_response.json.side_effect = [mock_board_response, [mock_card_response]]
         mocker.patch(
-            "trello_client_impl.trello_impl.requests.request",
+            "trello_client_impl.client.requests.request",
             return_value=mock_response,
         )
 
-        client = TrelloClient()
-        client.api_key = "test_key"
-        client._token = "test_token"
-        client._default_board_id = "board_id"
+        client = TrelloClient(**integration_credentials)
 
         board = client.get_board("board_id")
         assert board is not None
@@ -156,7 +151,7 @@ class TestClientWorkflows:
 
     def test_get_card_members_workflow(
         self,
-        integration_env_setup: Any,
+        integration_credentials: dict[str, str],
         mocker: MockerFixture,
         mock_member_response: dict[str, Any],
     ) -> None:
@@ -164,13 +159,11 @@ class TestClientWorkflows:
         mock_response = MagicMock()
         mock_response.json.return_value = [mock_member_response]
         mocker.patch(
-            "trello_client_impl.trello_impl.requests.request",
+            "trello_client_impl.client.requests.request",
             return_value=mock_response,
         )
 
-        client = TrelloClient()
-        client.api_key = "test_key"
-        client._token = "test_token"
+        client = TrelloClient(**integration_credentials)
 
         members = client.get_members_on_card("card_id")
         assert isinstance(members, list)
@@ -183,16 +176,16 @@ class TestFactoryFunctions:
     """Test factory functions work correctly."""
 
     def test_get_client_impl_returns_proper_client(
-        self, integration_env_setup: Any, mocker: MockerFixture
+        self, integration_credentials: dict[str, str], mocker: MockerFixture
     ) -> None:
         """Test get_client_impl returns a working Client instance."""
-        client = get_client_impl()
+        client = get_client_impl(**integration_credentials)
         assert isinstance(client, Client)
         assert isinstance(client, TrelloClient)
 
     def test_client_from_factory_is_usable(
         self,
-        integration_env_setup: Any,
+        integration_credentials: dict[str, str],
         mocker: MockerFixture,
         mock_card_response: dict[str, Any],
     ) -> None:
@@ -200,10 +193,10 @@ class TestFactoryFunctions:
         mock_response = MagicMock()
         mock_response.json.return_value = mock_card_response
         mocker.patch(
-            "trello_client_impl.trello_impl.requests.request",
+            "trello_client_impl.client.requests.request",
             return_value=mock_response,
         )
 
-        client = get_client_impl()
+        client = get_client_impl(**integration_credentials)
         issue = client.get_issue("test_id")
         assert issue is not None

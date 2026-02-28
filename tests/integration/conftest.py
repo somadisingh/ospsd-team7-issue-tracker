@@ -14,16 +14,20 @@ def mock_requests_integration(mocker: MockerFixture) -> Any:
 
 
 @pytest.fixture
-def integration_env_setup(mocker: MockerFixture) -> Any:
-    """Setup environment for integration tests with mocked credentials."""
-    return mocker.patch.dict(
-        "os.environ",
-        {
-            "TRELLO_API_KEY": "integration_test_api_key",
-            "TRELLO_TOKEN": "integration_test_token",
-            "TRELLO_BOARD_ID": "integration_test_board_id",
-        },
-    )
+def integration_credentials() -> dict[str, str]:
+    """Provide test credentials for integration tests."""
+    return {
+        "api_key": "integration_test_api_key",
+        "token": "integration_test_token",
+        "board_id": "integration_test_board_id",
+    }
+
+
+@pytest.fixture
+def integration_env_setup(mocker: MockerFixture, integration_credentials: dict[str, str]) -> None:
+    """Setup environment for integration tests (no longer used but kept for compatibility)."""
+    # Deprecated: credentials are now injected via integration_credentials fixture
+    pass
 
 
 @pytest.fixture
