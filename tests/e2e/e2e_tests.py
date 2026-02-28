@@ -14,7 +14,6 @@ These tests are skipped if credentials are not available.
 """
 
 import pytest
-from pytest_mock import MockerFixture
 from trello_client_impl import TrelloClient
 
 
@@ -162,5 +161,5 @@ class TestE2EAuthenticationFailure:
 
     def test_invalid_token_handling(self) -> None:
         """Test that invalid token is handled during client initialization."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="api_key and token are required"):
             TrelloClient(api_key="", token="", board_id="")

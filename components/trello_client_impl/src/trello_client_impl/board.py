@@ -1,6 +1,7 @@
 """Implementation of the Board contract."""
 
 from typing import TypedDict
+
 from issue_tracker_client_api import Board
 
 

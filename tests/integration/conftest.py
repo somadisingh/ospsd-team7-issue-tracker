@@ -27,7 +27,6 @@ def integration_credentials() -> dict[str, str]:
 def integration_env_setup(mocker: MockerFixture, integration_credentials: dict[str, str]) -> None:
     """Setup environment for integration tests (no longer used but kept for compatibility)."""
     # Deprecated: credentials are now injected via integration_credentials fixture
-    pass
 
 
 @pytest.fixture

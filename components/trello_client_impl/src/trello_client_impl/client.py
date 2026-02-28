@@ -7,9 +7,8 @@ See: https://developer.atlassian.com/cloud/trello/rest/api-group-cards/
 from collections.abc import Iterator
 from typing import Any, cast
 
-import requests
-
 import issue_tracker_client_api
+import requests
 from issue_tracker_client_api import Board, Client, Issue, Member
 
 from .board import TrelloBoard, _TrelloBoardResponse
@@ -42,6 +41,7 @@ class TrelloClient(Client):
             token: Trello token
             board_id: Optional default board ID
             interactive: Whether to enable interactive mode
+
         """
         if not api_key or not token:
             raise ValueError("api_key and token are required")
@@ -174,7 +174,7 @@ class TrelloClient(Client):
         return True
 
 
-def get_client_impl(**kwargs: Any) -> Client:
+def get_client_impl(**kwargs: Any) -> Client:  # noqa: ANN401
     """Return an instance of the Trello client.
 
     Extracts Trello-specific credentials from generic kwargs provided by consumer.
@@ -191,6 +191,7 @@ def get_client_impl(**kwargs: Any) -> Client:
 
     Raises:
         ValueError: If required credentials (api_key, token) are missing
+
     """
     api_key = kwargs.get("api_key")
     token = kwargs.get("token")

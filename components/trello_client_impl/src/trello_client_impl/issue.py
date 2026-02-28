@@ -1,6 +1,7 @@
 """Implementation of the Issue contract."""
 
 from typing import TypedDict
+
 from issue_tracker_client_api import Issue
 
 

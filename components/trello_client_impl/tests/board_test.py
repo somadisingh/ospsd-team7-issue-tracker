@@ -3,7 +3,6 @@
 from typing import Any
 
 import pytest
-
 from trello_client_impl import TrelloBoard
 
 

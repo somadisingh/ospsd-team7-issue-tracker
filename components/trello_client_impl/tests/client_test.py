@@ -5,7 +5,6 @@ from unittest.mock import MagicMock
 
 import pytest
 from pytest_mock import MockerFixture
-
 from trello_client_impl import (
     TrelloClient,
     get_client_impl,
