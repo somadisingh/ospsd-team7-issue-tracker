@@ -32,7 +32,7 @@ class TrelloCard(Issue):
         desc: str | None = None,
         due: str | None = None,
         board_id: str | None = None,
-        list_id: str = "",
+        list_id: str,
     ) -> None:
         self._id = id
         self._title = title
@@ -40,7 +40,7 @@ class TrelloCard(Issue):
         self._desc = desc
         self._due = due
         self._board_id = board_id
-        self._list_id = list_id or ""
+        self._list_id = list_id
 
     @property
     def is_complete(self) -> bool:
@@ -72,12 +72,15 @@ class TrelloCard(Issue):
 
     @classmethod
     def from_api(cls, card: _TrelloCardResponse) -> "TrelloCard":
-        """Build Card from API card object."""
+        """Build Card from API card object. Requires idList (every issue belongs to a list)."""
+        id_list = card.get("idList")
+        if not id_list:
+            raise ValueError("Card response must include idList")
         return cls(
             id=card["id"],
             title=card.get("name", ""),
             desc=card.get("desc") or None,
             due=card.get("due"),
             board_id=card.get("idBoard"),
-            list_id=card.get("idList"),
+            list_id=id_list,
         )
