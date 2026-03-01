@@ -1,0 +1,122 @@
+@startuml Issue Tracker Client Architecture
+
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+skinparam packageStyle rectangle
+
+title Issue Tracker Client API - Factory Method Pattern
+
+' Client (Consumer)
+class "C Solution" as Solution {
+  main(args: String[]): void
+}
+
+' ClientFactory interface
+interface "I ClientFactory" as ClientFactory {
+  createClient(): Client
+}
+
+' Client interface
+interface "I Client" as Client {
+  get_board(board_id: str): Board
+  get_boards(): Iterator[Board]
+  create_board(name: str): Board
+  add_member_to_board(board_id: str, member_id: str): bool
+  create_list(board_id: str, name: str): List
+  get_list(list_id: str): List
+  get_lists(board_id: str): Iterator[List]
+  update_list(list_id: str, name: str): List
+  delete_list(list_id: str): bool
+  create_issue(title: str, list_id: str, description?: str): Issue
+  get_issue(issue_id: str): Issue
+  get_issues_in_list(list_id: str, max_issues: int): Iterator[Issue]
+  update_status(issue_id: str, status: str): bool
+  get_members_on_issue(issue_id: str): list[Member]
+  assign_issue(issue_id: str, member_id: str): bool
+  delete_issue(issue_id: str): bool
+}
+
+' Concrete factories
+class "C TrelloClientFactory" as TrelloClientFactory {
+  createClient(): Client
+}
+
+' Domain interfaces
+interface "I Issue" as Issue {
+  id: str
+  title: str
+  is_complete: bool
+  list_id: str
+  board_id: str | None
+}
+
+interface "I Board" as Board {
+  id: str
+  name: str
+}
+
+interface "I List" as List {
+  id: str
+  name: str
+  board_id: str
+}
+
+interface "I Member" as Member {
+  id: str
+  username: str | None
+  is_board_member: bool | None
+}
+
+' Concrete domain implementations
+class "C TrelloCard" as TrelloCard {
+  from_api(card: dict): TrelloCard
+}
+
+class "C TrelloBoard" as TrelloBoard {
+  from_api(board: dict): TrelloBoard
+}
+
+class "C TrelloList" as TrelloList {
+  from_api(list: dict): TrelloList
+}
+
+class "C TrelloMember" as TrelloMember {
+  from_api(member: dict): TrelloMember
+}
+
+class "C TrelloClient" as TrelloClient {
+  get_board(board_id: str): Board
+  get_boards(): Iterator[Board]
+  create_board(name: str): Board
+  add_member_to_board(board_id: str, member_id: str): bool
+  create_list(board_id: str, name: str): List
+  get_list(list_id: str): List
+  get_lists(board_id: str): Iterator[List]
+  update_list(list_id: str, name: str): List
+  delete_list(list_id: str): bool
+  create_issue(title: str, list_id: str, description?: str): Issue
+  get_issue(issue_id: str): Issue
+  get_issues_in_list(list_id: str, max_issues: int): Iterator[Issue]
+  update_status(issue_id: str, status: str): bool
+  get_members_on_issue(issue_id: str): list[Member]
+  assign_issue(issue_id: str, member_id: str): bool
+  delete_issue(issue_id: str): bool
+}
+
+' Relationships
+Solution ..> ClientFactory : uses
+ClientFactory <|.. TrelloClientFactory : implements
+TrelloClientFactory ..> TrelloClient : association
+
+Client <|.. TrelloClient : implements
+TrelloClient ..> TrelloCard : creates
+TrelloClient ..> TrelloBoard : creates
+TrelloClient ..> TrelloList : creates
+TrelloClient ..> TrelloMember : creates
+
+Issue <|.. TrelloCard : implements
+Board <|.. TrelloBoard : implements
+List <|.. TrelloList : implements
+Member <|.. TrelloMember : implements
+
+@enduml

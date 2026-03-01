@@ -1,0 +1,27 @@
+[project]
+name = "issue-tracker-client-impl"
+version = "0.1.0"
+description = "Concrete implementation of the Issue Tracker client"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "issue-tracker-client-api",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trello_client_impl"]
+
+[tool.uv.sources]
+issue-tracker-client-api = { workspace = true }
