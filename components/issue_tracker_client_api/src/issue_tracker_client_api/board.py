@@ -1,14 +1,10 @@
-"""Board contract - Compatible with Trello Board object."""
+"""Board contract - Core board representation."""
 
 from abc import ABC, abstractmethod
 
 
 class Board(ABC):
-    """Abstract base class representing a board in the issue tracker.
-
-    Maps to Trello's Board object.
-    See: https://developer.atlassian.com/cloud/trello/guides/rest-api/object-definitions/#board-object
-    """
+    """Abstract base class representing a board in the issue tracker."""
 
     @property
     @abstractmethod

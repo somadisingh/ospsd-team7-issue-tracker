@@ -1,6 +1,7 @@
 """Unit tests for the Issue abstract class."""
 
 from abc import ABC
+from typing import Any
 
 import pytest
 from issue_tracker_client_api.issue import Issue, get_issue
@@ -10,40 +11,62 @@ from issue_tracker_client_api.issue import Issue, get_issue
 class TestIssueAbstractClass:
     """Test that Issue is an abstract base class with required properties."""
 
-    def test_issue_is_abstract(self):
+    def test_issue_is_abstract(self) -> None:
         """Test that Issue cannot be instantiated directly."""
         with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-            _ = Issue()  # type: ignore
+            _ = Issue()  # type: ignore[abstract]
 
-    def test_issue_is_abc(self):
+    def test_issue_is_abc(self) -> None:
         """Test that Issue is an ABC."""
         assert issubclass(Issue, ABC)
 
-    def test_issue_has_id_property(self):
+    def test_issue_has_id_property(self) -> None:
         """Test that Issue has an id property."""
         assert hasattr(Issue, "id")
         assert isinstance(Issue.id, property)
 
-    def test_issue_has_title_property(self):
+    def test_issue_has_title_property(self) -> None:
         """Test that Issue has a title property."""
         assert hasattr(Issue, "title")
         assert isinstance(Issue.title, property)
 
-    def test_issue_has_isComplete_property(self):
-        """Test that Issue has an isComplete property."""
-        assert hasattr(Issue, "isComplete")
-        assert isinstance(Issue.isComplete, property)
+    def test_issue_has_is_complete_property(self) -> None:
+        """Test that Issue has an is_complete property."""
+        assert hasattr(Issue, "is_complete")
+        assert isinstance(Issue.is_complete, property)
 
-    def test_concrete_issue_implementation(self, sample_issue_data):
+    def test_issue_has_list_id_property(self) -> None:
+        """Test that Issue has a list_id property."""
+        assert hasattr(Issue, "list_id")
+        assert isinstance(Issue.list_id, property)
+
+    def test_issue_has_board_id_property(self) -> None:
+        """Test that Issue has a board_id property."""
+        assert hasattr(Issue, "board_id")
+        assert isinstance(Issue.board_id, property)
+
+    def test_concrete_issue_implementation(
+        self, sample_issue_data: dict[str, Any]
+    ) -> None:
         """Test a concrete Issue implementation."""
 
         class ConcreteIssue(Issue):
             """Concrete implementation of Issue for testing."""
 
-            def __init__(self, id: str, title: str, isComplete: bool):
+            def __init__(
+                self,
+                id: str,
+                title: str,
+                is_complete: bool,
+                *,
+                list_id: str = "",
+                board_id: str | None = None,
+            ) -> None:
                 self._id = id
                 self._title = title
-                self._isComplete = isComplete
+                self._is_complete = is_complete
+                self._list_id = list_id
+                self._board_id = board_id
 
             @property
             def id(self) -> str:
@@ -54,28 +77,40 @@ class TestIssueAbstractClass:
                 return self._title
 
             @property
-            def isComplete(self) -> bool:
-                return self._isComplete
+            def is_complete(self) -> bool:
+                return self._is_complete
+
+            @property
+            def list_id(self) -> str:
+                return self._list_id
+
+            @property
+            def board_id(self) -> str | None:
+                return self._board_id
 
         issue = ConcreteIssue(
             id=sample_issue_data["id"],
             title=sample_issue_data["title"],
-            isComplete=sample_issue_data["isComplete"],
+            is_complete=sample_issue_data["is_complete"],
+            list_id="list_1",
+            board_id="board_1",
         )
         assert issue.id == sample_issue_data["id"]
         assert issue.title == sample_issue_data["title"]
-        assert issue.isComplete == sample_issue_data["isComplete"]
+        assert issue.is_complete == sample_issue_data["is_complete"]
+        assert issue.list_id == "list_1"
+        assert issue.board_id == "board_1"
 
 
 @pytest.mark.unit
 class TestGetIssueFactory:
     """Test the get_issue factory function."""
 
-    def test_get_issue_not_implemented(self):
+    def test_get_issue_not_implemented(self) -> None:
         """Test that get_issue raises NotImplementedError."""
         with pytest.raises(NotImplementedError, match="Subclasses must implement"):
             get_issue("test_issue_id")
 
-    def test_get_issue_marks_abstract_interface(self):
+    def test_get_issue_marks_abstract_interface(self) -> None:
         """Test that get_issue is part of the abstract interface."""
         assert callable(get_issue)

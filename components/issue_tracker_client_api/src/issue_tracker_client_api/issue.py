@@ -1,34 +1,40 @@
-"""Issue (Card) contract - Core issue representation compatible with Trello Card."""
+"""Issue contract - Core issue representation."""
 
 from abc import ABC, abstractmethod
 
 
 class Issue(ABC):
-    """Abstract base class representing an issue/card in the issue tracker.
-
-    Aligns with Trello's Card object where applicable. Required: id, title, isComplete.
-    Optional fields (desc, due, id_board, etc.) map to Trello Card;
-    return None if unsupported.
-    See: https://developer.atlassian.com/cloud/trello/guides/rest-api/object-definitions/#card-object
-    """
+    """Abstract base class representing an issue in the issue tracker."""
 
     @property
     @abstractmethod
     def id(self) -> str:
-        """Return the unique identifier of the issue (Trello: card id)."""
+        """Return the unique identifier of the issue."""
         raise NotImplementedError("Subclasses must implement id")
 
     @property
     @abstractmethod
     def title(self) -> str:
-        """Return the title of the issue (Trello: card name)."""
+        """Return the title of the issue."""
         raise NotImplementedError("Subclasses must implement title")
 
     @property
     @abstractmethod
-    def isComplete(self) -> bool:
-        """Return whether the issue is complete (Trello: card dueComplete)."""
-        raise NotImplementedError("Subclasses must implement isComplete")
+    def is_complete(self) -> bool:
+        """Return whether the issue is complete."""
+        raise NotImplementedError("Subclasses must implement is_complete")
+
+    @property
+    @abstractmethod
+    def list_id(self) -> str:
+        """Return the ID of the list this issue belongs to."""
+        raise NotImplementedError("Subclasses must implement list_id")
+
+    @property
+    @abstractmethod
+    def board_id(self) -> str | None:
+        """Return the ID of the board this issue belongs to, or None if unknown."""
+        raise NotImplementedError("Subclasses must implement board_id")
 
 
 def get_issue(issue_id: str) -> Issue:

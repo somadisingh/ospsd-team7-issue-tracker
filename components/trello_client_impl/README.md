@@ -8,7 +8,7 @@
 
 - **Trello API integration:** Uses Trello's Cards, Boards, and Members endpoints.
 - **Token-based auth:** Authenticates via API key + token (environment or `token.json`).
-- **Full Client implementation:** Implements all abstract `Client` methods (issues, boards, members).
+- **Full Client implementation:** Implements all abstract `Client` methods (issues, boards, lists CRUD, members).
 - **Dependency injection:** Registers itself as the `get_client` implementation on import.
 
 ## Architecture
@@ -40,29 +40,42 @@ client = get_client(interactive=False)
 
 | Type          | API contract        | Description                                      |
 |---------------|---------------------|--------------------------------------------------|
-| `TrelloCard`  | `Issue`             | Issue (id, title, isComplete) |
+| `TrelloCard`  | `Issue`             | Issue (id, title, is_complete, list_id, board_id) |
 | `TrelloBoard` | `Board`             | Board (id, name)       |
-| `TrelloMember`| `Member`            | Member (id, username, confirmed) |
+| `TrelloList`  | `List`              | List (id, name, board_id) |
+| `TrelloMember`| `Member`            | Member (id, username, is_board_member) |
 
 ### TrelloClient
 
-Implements `issue_tracker_client_api.Client`.
+Implements `issue_tracker_client_api.Client`. Constructor accepts **`status_list_ids: dict[str, str]`** (status name → list ID) so **`update_status(issue_id, status)`** moves the issue to the corresponding list.
 
-#### Issue / Card methods
+#### Issue methods
 
-- **`get_issue(issue_id: str) -> Issue`** – Single card (GET /cards/{id}).
-- **`delete_issue(issue_id: str) -> bool`** – Delete card (DEL /cards/{id}).
-- **`mark_complete(issue_id: str) -> bool`** – Set card due complete (PUT /cards/{id}).
-- **`get_issues(max_issues: int = 10) -> Iterator[Issue]`** – Cards on board (GET /boards/{id}/cards).
+- **`get_issue(issue_id: str) -> Issue`** – Single issue (GET /cards/{id}).
+- **`delete_issue(issue_id: str) -> bool`** – Archive then delete (PUT + DEL /cards/{id}).
+- **`create_issue(title, list_id, description=None) -> Issue`** – Create issue (POST /cards).
+- **`update_status(issue_id, status) -> bool`** – Move issue to the list for that status (PUT /cards/{id}, idList).
+- **`assign_issue(issue_id, member_id) -> bool`** – Add member (POST /cards/{id}/idMembers).
 
 #### Board methods
 
 - **`get_board(board_id: str) -> Board`** – Single board (GET /boards/{id}).
 - **`get_boards() -> Iterator[Board]`** – Current user’s boards (GET /members/me/boards).
+- **`create_board(name: str) -> Board`** – Create board (POST /boards).
+- **`add_member_to_board(board_id, member_id: str) -> bool`** – Add member to board (PUT /boards/{id}/members/{idMember}). Members are existing Trello users. Returns True on success.
+
+#### List methods (status columns)
+
+- **`get_list(list_id: str) -> List`** – Single list (GET /lists/{id}).
+- **`get_lists(board_id: str) -> Iterator[List]`** – Lists on board (GET /boards/{id}/lists).
+- **`get_issues_in_list(list_id, max_issues=100) -> Iterator[Issue]`** – Issues in list (GET /lists/{id}/cards).
+- **`create_list(board_id, name) -> List`** – Create list (POST /lists); adds a status column.
+- **`update_list(list_id, name) -> List`** – Rename list (PUT /lists/{id}).
+- **`delete_list(list_id: str) -> bool`** – Archive list (PUT /lists/{id}, closed: true).
 
 #### Member methods
 
-- **`get_members_on_card(issue_id: str) -> list[Member]`** – Members on a card (GET /cards/{id}/members).
+- **`get_members_on_issue(issue_id: str) -> list[Member]`** – Members on an issue (GET /cards/{id}/members).
 
 ### Factory
 
@@ -70,15 +83,16 @@ Implements `issue_tracker_client_api.Client`.
 
 ## Usage examples
 
-### Basic issue retrieval
+### Basic issue retrieval by list
 
 ```python
 import trello_client_impl
 from issue_tracker_client_api import get_client
 
 client = get_client(interactive=False)
-for issue in client.get_issues(max_issues=3):
-    print(f"{issue.id}: {issue.title} (complete={issue.isComplete})")
+for lst in client.get_lists(board_id):
+    for issue in client.get_issues_in_list(lst.id, max_issues=100):
+        print(f"{issue.id}: {issue.title} (complete={issue.is_complete})")
 ```
 
 ### Card with Trello fields
@@ -88,7 +102,7 @@ import trello_client_impl
 from issue_tracker_client_api import get_client
 
 client = get_client(interactive=False)
-issue = client.get_issue("card-id")
+issue = client.get_issue("issue-id")
 print(issue.title)
 ```
 
@@ -103,7 +117,7 @@ for board in client.get_boards():
     print(board.id, board.name, board.url)
 b = client.get_board("board-id")
 
-members = client.get_members_on_card("card-id")
+members = client.get_members_on_issue("issue-id")
 for m in members:
     print(m.id, m.username)
 ```

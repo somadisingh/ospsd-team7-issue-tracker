@@ -47,7 +47,9 @@ Quick reference guide for all test files and their contents.
   - `test_issue_is_abc` - Issue inherits from ABC
   - `test_issue_has_id_property` - id property exists
   - `test_issue_has_title_property` - title property exists
-  - `test_issue_has_isComplete_property` - isComplete property exists
+  - `test_issue_has_is_complete_property` - is_complete property exists
+  - `test_issue_has_list_id_property` - list_id property exists
+  - `test_issue_has_board_id_property` - board_id property exists
   - `test_concrete_issue_implementation` - Test concrete implementation
 - `TestGetIssueFactory` - Factory function tests
   - `test_get_issue_not_implemented` - Factory raises NotImplementedError
@@ -66,7 +68,7 @@ Quick reference guide for all test files and their contents.
   - `test_member_is_abc` - Member inherits from ABC
   - `test_member_has_id_property` - id property exists
   - `test_member_has_username_property` - username property exists
-  - `test_member_has_confirmed_property` - confirmed property exists
+  - `test_member_has_is_board_member_property` - is_board_member property exists
   - `test_concrete_member_implementation` - Test concrete implementation
   - `test_member_with_none_properties` - Test None property values
 - `TestGetMemberFactory` - Factory function tests
@@ -78,42 +80,72 @@ Quick reference guide for all test files and their contents.
 
 ## Unit Tests - Concrete Implementation
 
-### [trello_impl_test.py](components/trello_client_impl/tests/trello_impl_test.py)
-**Purpose:** Test the Trello client implementation
+### [board_test.py](components/trello_client_impl/tests/board_test.py)
+**Purpose:** Test the TrelloBoard concrete implementation of Board interface
 
 **Test Classes:**
-- `TestTrelloCard` - TrelloCard (Issue implementation) tests
-  - `test_trello_card_initialization` - Card creation and properties
-  - `test_trello_card_from_api` - Static factory method
-  - `test_trello_card_properties` - Property access
 - `TestTrelloBoard` - TrelloBoard (Board implementation) tests
   - `test_trello_board_initialization` - Board creation
-  - `test_trello_board_from_api` - Static factory method
-  - `test_trello_board_properties` - Property access
-- `TestTrelloMember` - TrelloMember (Member implementation) tests
-  - `test_trello_member_initialization` - Member creation
-  - `test_trello_member_from_api` - Static factory method
-  - `test_trello_member_optional_fields` - Optional field handling
+  - `test_trello_board_from_api` - Static factory method from API response
+  - `test_trello_board_properties` - Property access (id, name)
+
+**Marked:** `@pytest.mark.unit`
+
+---
+
+### [client_test.py](components/trello_client_impl/tests/client_test.py)
+**Purpose:** Test the TrelloClient concrete implementation and factory functions
+
+**Test Classes:**
 - `TestTrelloClient` - TrelloClient (Client implementation) tests
   - `test_trello_client_initialization` - Client creation
-  - `test_trello_client_interactive_mode` - Interactive flag
+  - `test_trello_client_interactive_mode` - Interactive flag handling
   - `test_trello_client_api_key_from_env` - Environment variable loading
   - `test_trello_client_token_property` - Token property access
-  - `test_trello_client_query_method` - Query parameter building
+  - `test_trello_client_token_raises_when_missing` - Error handling for missing token
+  - `test_trello_client_query_method` - Query parameter building with credentials
   - `test_trello_client_get_issue` - get_issue with mocked requests
   - `test_trello_client_delete_issue` - delete_issue with mocked requests
-  - `test_trello_client_mark_complete` - mark_complete with mocked requests
+  - `test_trello_client_update_status_moves_issue_to_list` - update_status moves issue when status_list_ids set
+  - `test_trello_client_update_status_unknown_status_no_op` - update_status no-op for unknown status
+  - `test_trello_client_assign_issue` - assign_issue with mocked requests
   - `test_trello_client_get_board` - get_board with mocked requests
-  - `test_trello_client_get_members_on_card` - get_members_on_card with mocked requests
-  - `test_trello_client_get_issues` - get_issues returns iterator
+  - `test_trello_client_get_members_on_issue` - get_members_on_issue with mocked requests
+  - `test_trello_client_get_issues_in_list` - get_issues_in_list returns issues in list
 - `TestGetClientImpl` - Factory function tests
-  - `test_get_client_impl_returns_trello_client` - Factory returns correct type
-  - `test_get_client_impl_with_interactive_flag` - Interactive flag passed through
+  - `test_get_client_impl_returns_trello_client` - Factory returns TrelloClient instance
+  - `test_get_client_impl_with_interactive_flag` - Interactive flag passed through factory
 - `TestRegister` - Register function tests
   - `test_register_function_exists` - Register function is callable
 
 **Marked:** `@pytest.mark.unit`
 **Mocking:** All requests to Trello API are mocked
+
+---
+
+### [issue_test.py](components/trello_client_impl/tests/issue_test.py)
+**Purpose:** Test the TrelloCard concrete implementation of Issue interface
+
+**Test Classes:**
+- `TestTrelloCard` - TrelloCard (Issue implementation) tests
+  - `test_trello_issue_initialization` - Issue creation and properties
+  - `test_trello_card_from_api` - Static factory method from API response
+  - `test_trello_card_properties` - Property access (id, title, is_complete, list_id, board_id)
+
+**Marked:** `@pytest.mark.unit`
+
+---
+
+### [member_test.py](components/trello_client_impl/tests/member_test.py)
+**Purpose:** Test the TrelloMember concrete implementation of Member interface
+
+**Test Classes:**
+- `TestTrelloMember` - TrelloMember (Member implementation) tests
+  - `test_trello_member_initialization` - Member creation
+  - `test_trello_member_from_api` - Static factory method from API response
+  - `test_trello_member_optional_fields` - Optional field handling (username, is_board_member)
+
+**Marked:** `@pytest.mark.unit`
 
 ---
 
@@ -136,9 +168,9 @@ Quick reference guide for all test files and their contents.
   - `test_trello_member_is_instance_of_member` - TrelloMember is a Member
   - `test_trello_member_implements_member_interface` - Interface implemented
 - `TestClientWorkflows` - Multi-step workflows with mocked requests
-  - `test_get_and_mark_complete_workflow` - Get issue then mark complete
-  - `test_get_board_and_cards_workflow` - Get board then get cards
-  - `test_get_card_members_workflow` - Get card members
+  - `test_get_issue_and_update_status_workflow` - Get issue then update status
+  - `test_get_board_and_lists_and_issues_workflow` - Get board then get lists and issues in list
+  - `test_get_issue_members_workflow` - Get members on issue
 - `TestFactoryFunctions` - Factory function integration tests
   - `test_get_client_impl_returns_proper_client` - Factory returns working client
   - `test_client_from_factory_is_usable` - Client performs operations
@@ -160,10 +192,10 @@ Quick reference guide for all test files and their contents.
 - `TestE2EClientOperations` - Real API operations
   - `test_get_board_from_api` - Fetch board from real API
   - `test_list_boards_from_api` - List user's boards from real API
-  - `test_get_issues_workflow` - Get issues from real API
+  - `test_get_issues_in_list_workflow` - Get issues in list from real API
 - `TestE2EErrorHandling` - Real error scenarios
   - `test_invalid_board_id_handling` - Invalid board ID handling
-  - `test_invalid_card_id_handling` - Invalid card ID handling
+  - `test_invalid_issue_id_handling` - Invalid issue ID handling
 - `TestE2EInterfaceCompliance` - Interface compliance to real API
   - `test_client_interface_compliance` - All methods present and callable
 - `TestE2EAuthenticationFailure` - Authentication error handling

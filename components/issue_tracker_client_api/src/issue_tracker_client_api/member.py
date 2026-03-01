@@ -1,14 +1,10 @@
-"""Member contract - Compatible with Trello Member object."""
+"""Member contract - Core member representation."""
 
 from abc import ABC, abstractmethod
 
 
 class Member(ABC):
-    """Abstract base class representing a member/user in the issue tracker.
-
-    Maps to Trello's Member object.
-    See: https://developer.atlassian.com/cloud/trello/guides/rest-api/object-definitions/#member-object
-    """
+    """Abstract base class representing a member in the issue tracker."""
 
     @property
     @abstractmethod
@@ -19,14 +15,14 @@ class Member(ABC):
     @property
     @abstractmethod
     def username(self) -> str | None:
-        """Return the username (Trello: username)."""
+        """Return the username."""
         raise NotImplementedError("Subclasses must implement username")
 
     @property
     @abstractmethod
-    def confirmed(self) -> bool | None:
-        """Whether the user has confirmed their email (Trello: confirmed)."""
-        raise NotImplementedError("Subclasses must implement confirmed")
+    def is_board_member(self) -> bool | None:
+        """Whether the member can be assigned to issues on the board."""
+        raise NotImplementedError("Subclasses must implement is_board_member")
 
 
 def get_member(member_id: str) -> Member:

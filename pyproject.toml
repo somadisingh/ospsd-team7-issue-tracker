@@ -30,32 +30,54 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-  "D203",   # `incorrect-blank-line-before-class` (D203) and `no-blank-line-before-class` (D211) are incompatible. Ignoring `incorrect-blank-line-before-class`.
-  "D213",   # `multi-line-summary-first-line` (D212) and `multi-line-summary-second-line` (D213) are incompatible. Ignoring `multi-line-summary-second-line`.
-  "COM812", # `missing-trailing-comma` conflicts with the ruff formatter, which handles trailing commas automatically.
-  "S101",   # Use of `assert` detected — asserts are intentional in our codebase; tests use them profusely.
+  "D203",   # Incompatible with D211
+  "D213",   # Incompatible with D212
+  "COM812", # Conflicts with ruff formatter
+  "EM101",  # NotImplementedError with inline strings is idiomatic Python
+  "EM102",  # Same as EM101 for assert statements
+  "E501",   # Line too long — docstrings and type hints can exceed line length
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Test files: relaxed rules for pytest patterns and fixtures
+# Test files: pytest-specific patterns that are expected in tests
 "**/tests/**/*.py" = [
-  "TRY300",  # Return inside try block — common pattern in test error handling
-  "BLE001",  # Blind exception catch — tests may catch broad exceptions intentionally
-  "ANN401",  # Dynamically typed expressions (Any) — needed for mocking
-  "SLF001",  # Private member access — tests may need to verify internal state
-  "E501",    # Line too long — test assertions can be verbose
-  "S105",    # Hardcoded password in variable — tests use fake credentials
-  "ARG001",  # Unused function argument — pytest fixtures may appear unused
-  "ARG002",  # Unused method argument — same as above
+  "S101",    # Use of assert — standard in pytest
+  "S105",    # Hardcoded password — test fixtures use fake credentials
   "S106",    # Hardcoded password in function arg — same as above
-  "INP001",  # Missing __init__.py — test dirs must not have __init__.py per hw1
-  "PLC0415", # Import not at top of file — tests may import inside functions
+  "S110",    # try/except/pass — expected pattern in exception tests
+  "PLR2004", # Magic numbers — expected in test assertions
+  "D100",    # Missing module docstring — test modules are self-documenting
+  "D102",    # Missing docstring in method — test names are descriptive
+  "D103",    # Missing function docstring — pytest function names describe intent
+  "D107",    # Missing __init__ docstring — test classes are fixtures
+  "D401",    # Imperative mood — not applicable to test methods
+  "ANN001",  # Missing type annotation — pytest fixtures
+  "ANN201",  # Missing return type — pytest functions
+  "ANN202",  # Missing return type — pytest private methods
+  "ANN401",  # Dynamically typed Any — needed for mocking
+  "A002",    # Shadowing builtin (id) — required for API mapping in tests
+  "ARG001",  # Unused argument — pytest fixtures may not be directly used
+  "ARG002",  # Unused argument — same as above
+  "FBT001",  # Boolean positional arg — common in test fixtures
+  "BLE001",  # Blind exception catch — intentional in error handling tests
+  "SLF001",  # Private member access — tests verify internal state
+  "F841",    # Unused variable — intentional in try/except tests
+  "INP001",  # Missing __init__.py — test dirs must not have it
 ]
-# Pytest conftest: hooks and fixtures
+# Trello implementation: similar to tests, but stricter for production code
+"components/trello_client_impl/src/**/*.py" = [
+  "D102",    # Missing method docstring — implementation follows interface
+  "D107",    # Missing __init__ docstring — dataclass/TypedDict
+  "A002",    # id shadows builtin — required for Trello API mapping
+  "TRY003",  # Long exception messages — user-facing error context
+  "BLE001",  # Blind exception catching — network error handling
+  "PLR0913", # Too many arguments — Trello Card has many fields
+]
+# Conftest: pytest configuration
 "conftest.py" = [
-  "ANN001",  # config arg — pytest hook
-  "ANN201",  # return type — pytest hook
-  "E501",    # Line too long — marker descriptions
+  "ANN001",  # config arg — pytest hook parameter
+  "ANN201",  # return type — pytest hook return
+  "D103",    # Missing function docstring — fixture names are descriptive
 ]
 
 [tool.mypy]

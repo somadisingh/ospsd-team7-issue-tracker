@@ -26,7 +26,10 @@ The testing framework includes:
      - `member_tests.py` - Member abstract class interface
 
    - `trello_client_impl/tests/`:
-     - `trello_impl_test.py` - TrelloClient, TrelloCard, TrelloBoard, TrelloMember implementations
+     - `board_test.py` - TrelloBoard (Board implementation) tests
+     - `client_test.py` - TrelloClient and factory functions tests
+     - `issue_test.py` - TrelloCard (Issue implementation) tests
+     - `member_test.py` - TrelloMember (Member implementation) tests
 
 ### 2. **Integration Tests** (real dependencies)
    - **Location**: `tests/integration/`
@@ -73,7 +76,10 @@ ospsd-team-07/
 │       ├── src/trello_client_impl/       # Concrete Trello implementation
 │       └── tests/
 │           ├── conftest.py               # Trello test fixtures
-│           └── trello_impl_test.py       # Implementation tests
+│           ├── board_test.py             # TrelloBoard tests
+│           ├── client_test.py            # TrelloClient tests
+│           ├── issue_test.py             # TrelloCard tests
+│           └── member_test.py            # TrelloMember tests
 │
 └── tests/
     ├── integration/
@@ -147,7 +153,10 @@ pytest tests/integration/ -v
 
 ```bash
 pytest components/issue_tracker_client_api/tests/client_tests.py -v
-pytest components/trello_client_impl/tests/trello_impl_test.py -v
+pytest components/trello_client_impl/tests/board_test.py -v
+pytest components/trello_client_impl/tests/client_test.py -v
+pytest components/trello_client_impl/tests/issue_test.py -v
+pytest components/trello_client_impl/tests/member_test.py -v
 ```
 
 ### Run Specific Test Class or Function
@@ -189,6 +198,8 @@ Current coverage thresholds:
 
 E2E tests require valid Trello credentials. They are automatically skipped if credentials are unavailable.
 
+**Important:** The client library itself is provider-agnostic and accepts generic `api_key`, `token`, and `board_id` parameters. Your consumer application is responsible for loading credentials from any source (environment variables, config files, secrets manager, database, etc.). The `TRELLO_*` environment variables are just one convention for this Trello implementation.
+
 ### Setting Up E2E Tests
 
 1. **Get Trello Credentials:**
@@ -196,26 +207,46 @@ E2E tests require valid Trello credentials. They are automatically skipped if cr
    - Generate API key and token
    - Note your test board ID
 
-2. **Set Environment Variables:**
+2. **Load Credentials into Environment:**
 
+   The E2E tests read from `TRELLO_API_KEY`, `TRELLO_TOKEN`, and `TRELLO_BOARD_ID` environment variables. Provide them in one of these ways:
+
+   **Option A: Direct environment export**
    ```bash
    export TRELLO_API_KEY="your_api_key_here"
    export TRELLO_TOKEN="your_token_here"
    export TRELLO_BOARD_ID="your_test_board_id"
+   pytest -m e2e -v
    ```
 
-   Or create a `.env` file:
+   **Option B: Load from `.env` file**
    ```
    TRELLO_API_KEY=your_api_key_here
    TRELLO_TOKEN=your_token_here
    TRELLO_BOARD_ID=your_test_board_id
    ```
+   Then run:
+   ```bash
+   export $(cat .env | xargs)
+   pytest -m e2e -v
+   ```
+
+   **Option C: In your consumer application**
+   Your consumer app can load credentials from any source and pass them generically:
+   ```python
+   from trello_client_impl import get_client_impl
+   import os
+   
+   # E2E tests use env vars, but your app could load from config, database, secrets manager, etc.
+   client = get_client_impl(
+       api_key=os.getenv("TRELLO_API_KEY"),
+       token=os.getenv("TRELLO_TOKEN"),
+       board_id=os.getenv("TRELLO_BOARD_ID", ""),
+   )
+   ```
 
 3. **Run E2E Tests:**
-
    ```bash
-   # Configure Python-dotenv to load .env file if present
-   export $(cat .env | xargs)
    pytest -m e2e -v
    ```
 
@@ -237,7 +268,7 @@ E2E tests require valid Trello credentials. They are automatically skipped if cr
 
 #### `trello_client_impl/tests/conftest.py`
 - `mock_requests()` - Mocked requests module
-- `mock_os_environ()` - Mocked environment variables
+- `trello_credentials()` - Test credentials fixture (api_key, token, board_id)
 - `trello_client_data()` - Client configuration
 - `mock_card_response()` - Card API response
 - `mock_board_response()` - Board API response
@@ -245,12 +276,14 @@ E2E tests require valid Trello credentials. They are automatically skipped if cr
 
 #### `tests/integration/conftest.py`
 - `mock_requests_integration()` - Integration test requests mock
-- `integration_env_setup()` - Environment setup for integration
+- `integration_credentials()` - Test credentials fixture (api_key, token, board_id)
 - `mock_client_implementation()` - Mock client for integration tests
+- `mock_card_response()`, `mock_board_response()`, `mock_member_response()` - API response mocks
 
 #### `tests/e2e/conftest.py`
+- `e2e_credentials()` - Load credentials from environment variables
 - `e2e_skip_if_no_credentials()` - Skip tests if credentials missing
-- `e2e_client_config()` - E2E test configuration
+- `e2e_client_config()` - E2E test configuration (references e2e_credentials)
 
 ## Mocking Strategy
 
