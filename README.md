@@ -13,7 +13,7 @@ Welcome to the repository for Team 7! This project focuses on developing an inte
 ## Setup Instructions
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/](https://github.com/)[your-username]/[repo-name].git
+   git clone https://github.com/somadisingh/ospsd-team7-issue-tracker.git
    
 ## LICENSE
 [MIT LICENSE] - see the [LICENSE](LICENSE) file for details.
