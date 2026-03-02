@@ -1,7 +1,7 @@
 # Issue Tracker Client: A Component-Based Trello Integration
 
-[![CircleCI](https://circleci.com/gh/riddhixraina/ospsd-team-07.svg?style=shield)](https://app.circleci.com/pipelines/circleci/JuR3AzQNKfWyuEqeHEELnR)
-[![Coverage](https://codecov.io/gh/riddhixraina/ospsd-team-07/branch/hw1/graph/badge.svg)](https://codecov.io/gh/riddhixraina/ospsd-team-07)
+[![CircleCI](https://dl.circleci.com/status-badge/img/circleci/H1UyoZTBnANBFPJu9yXQrw/RtX7q9iZYQCkKP2LcEeNrY/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/circleci/H1UyoZTBnANBFPJu9yXQrw/RtX7q9iZYQCkKP2LcEeNrY/tree/main)
+<!-- [![Coverage](https://codecov.io/gh/riddhixraina/ospsd-team-07/branch/hw1/graph/badge.svg)](https://codecov.io/gh/riddhixraina/ospsd-team-07) -->
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
