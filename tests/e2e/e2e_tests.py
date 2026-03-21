@@ -158,6 +158,8 @@ class TestE2EInterfaceCompliance:
             "get_members_on_issue",
             "assign_issue",
             "create_issue",
+            "get_authorization_url",
+            "exchange_request_token",
         ]
 
         for method_name in required_methods:
@@ -171,5 +173,5 @@ class TestE2EAuthenticationFailure:
 
     def test_invalid_token_handling(self) -> None:
         """Test that invalid token is handled during client initialization."""
-        with pytest.raises(ValueError, match="api_key and token are required"):
+        with pytest.raises(ValueError, match="api_key is required"):
             TrelloClient(api_key="", token="", board_id="")

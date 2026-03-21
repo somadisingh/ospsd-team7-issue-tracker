@@ -175,6 +175,12 @@ class _ConcreteClient(Client):
             board_id="test_board_id",
         )
 
+    def get_authorization_url(self, callback_url: str | None = None) -> str:
+        return "https://example.com/auth"
+
+    def exchange_request_token(self, oauth_token: str, oauth_verifier: str) -> None:
+        pass
+
 
 @pytest.mark.unit
 class TestClientAbstractClass:
@@ -208,6 +214,8 @@ class TestClientAbstractClass:
             "get_members_on_issue",
             "assign_issue",
             "create_issue",
+            "get_authorization_url",
+            "exchange_request_token",
         ]
         for method_name in required_methods:
             assert hasattr(Client, method_name)

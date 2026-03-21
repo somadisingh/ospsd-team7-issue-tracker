@@ -51,9 +51,9 @@ class TestTrelloClient:
         assert client.token == "test_token"
 
     def test_trello_client_token_raises_when_missing(self) -> None:
-        """Test TrelloClient raises ValueError when token not provided."""
-        with pytest.raises(ValueError, match="api_key and token are required"):
-            TrelloClient(api_key="key", token="")
+        """Test TrelloClient raises ValueError when api_key not provided."""
+        with pytest.raises(ValueError, match="api_key is required"):
+            TrelloClient(api_key="", token="token")
 
     def test_trello_client_query_method(
         self, trello_credentials: dict[str, str]
