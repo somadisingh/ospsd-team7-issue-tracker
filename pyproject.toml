@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "OSPSD Team 07 - Issue Tracker Client"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "requests-oauthlib>=1.3.0",
+]
 
 [project.optional-dependencies]
 dev = [
