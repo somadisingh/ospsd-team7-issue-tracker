@@ -393,7 +393,7 @@ class TestGetClientImpl:
 
     def test_get_client_impl_raises_without_credentials(self) -> None:
         """Test get_client_impl raises error without required credentials."""
-        with pytest.raises(ValueError, match="Trello requires"):
+        with pytest.raises(ValueError, match="Issue Tracker requires either 'token'"):
             get_client_impl(api_key="key")  # Missing token
 
 
