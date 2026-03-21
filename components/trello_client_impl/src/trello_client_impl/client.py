@@ -10,6 +10,7 @@ from typing import Any
 import issue_tracker_client_api
 import requests
 from issue_tracker_client_api import Board, Client, Issue, List, Member
+from requests_oauthlib import OAuth1, OAuth1Session
 
 from .board import TrelloBoard, _is_trello_board_response
 from .issue import TrelloCard, _is_trello_card_response
@@ -31,7 +32,10 @@ class TrelloClient(Client):
         self,
         *,
         api_key: str,
-        token: str,
+        secret: str | None = None,
+        token: str | None = None,  # Deprecated, use access_token
+        access_token: str | None = None,
+        access_token_secret: str | None = None,
         board_id: str | None = None,
         status_list_ids: dict[str, str] | None = None,
         interactive: bool = False,
@@ -40,7 +44,10 @@ class TrelloClient(Client):
 
         Args:
             api_key: Trello API key
-            token: Trello token
+            secret: Trello API secret (for OAuth)
+            token: Deprecated, use access_token
+            access_token: OAuth access token
+            access_token_secret: OAuth access token secret
             board_id: Optional default board ID
             status_list_ids: Optional mapping of status name to list ID for
                 update_status (e.g. {"todo": "id1", "in_progress": "id2", "complete": "id3"}).
@@ -48,20 +55,60 @@ class TrelloClient(Client):
             interactive: Whether to enable interactive mode
 
         """
-        if not api_key or not token:
-            raise ValueError("api_key and token are required")
+        if not api_key:
+            raise ValueError("api_key is required")
+        if token and access_token:
+            raise ValueError("Use access_token, not token")
         self.api_key = api_key
-        self._token = token
+        self.secret = secret
+        self._access_token = access_token or token
+        self._access_token_secret = access_token_secret
         self._default_board_id = board_id
         self._status_list_ids = status_list_ids or {}
         self.interactive = interactive
+        self._oauth = None
+        if self._access_token and self._access_token_secret and secret:
+            self._oauth = OAuth1(api_key, secret, self._access_token, self._access_token_secret)
+        elif self._access_token and not self._access_token_secret:
+            # Old way, no OAuth
+            pass
+        self._request_token = None
+        self._request_token_secret = None
+
+    def get_authorization_url(self, callback_url: str | None = None) -> str:
+        if not self.secret:
+            raise ValueError("Secret is required for OAuth")
+        oauth = OAuth1Session(self.api_key, client_secret=self.secret, callback_uri=callback_url)
+        request_token_url = f"{BASE_URL}/OAuthGetRequestToken"
+        fetch_response = oauth.fetch_request_token(request_token_url)
+        self._request_token = fetch_response.get('oauth_token')
+        self._request_token_secret = fetch_response.get('oauth_token_secret')
+        authorization_url = f"{BASE_URL}/OAuthAuthorizeToken?oauth_token={self._request_token}"
+        return authorization_url
+
+    def exchange_request_token(self, oauth_token: str, oauth_verifier: str) -> None:
+        if not self.secret or not self._request_token or not self._request_token_secret:
+            raise ValueError("OAuth flow not initialized")
+        oauth = OAuth1Session(self.api_key, client_secret=self.secret,
+                              resource_owner_key=self._request_token,
+                              resource_owner_secret=self._request_token_secret,
+                              verifier=oauth_verifier)
+        access_token_url = f"{BASE_URL}/OAuthGetAccessToken"
+        oauth_tokens = oauth.fetch_access_token(access_token_url)
+        self._access_token = oauth_tokens.get('oauth_token')
+        self._access_token_secret = oauth_tokens.get('oauth_token_secret')
+        self._oauth = OAuth1(self.api_key, self.secret, self._access_token, self._access_token_secret)
 
     @property
-    def token(self) -> str:
-        return self._token
+    def token(self) -> str | None:
+        return self._access_token
 
     def _query(self, **kwargs: str) -> dict[str, str]:
-        return {"key": self.api_key, "token": self.token, **kwargs}
+        if self._oauth:
+            return kwargs
+        if self._access_token:
+            return {"key": self.api_key, "token": self._access_token, **kwargs}
+        return {"key": self.api_key, **kwargs}
 
     def _request(
         self,
@@ -78,8 +125,10 @@ class TrelloClient(Client):
             headers={"Accept": "application/json"},
             params=req_params,
             json=json_payload,
-            timeout=30,
+            auth=self._oauth,
         )
+        #     timeout=30,
+        # )
         resp.raise_for_status()
         return resp.json() if resp.content else None
 
