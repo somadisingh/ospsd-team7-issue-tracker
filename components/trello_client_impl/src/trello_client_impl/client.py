@@ -18,6 +18,7 @@ from .list import TrelloList, _is_trello_list_response
 from .member import TrelloMember, _is_trello_member_response
 
 BASE_URL = "https://api.trello.com/1"
+OAUTH_BASE_URL = "https://trello.com/1" # OAuth endpoints have separate base URL
 
 
 class TrelloClient(Client):
@@ -36,6 +37,7 @@ class TrelloClient(Client):
         token: str | None = None,  # Deprecated, use access_token
         access_token: str | None = None,
         access_token_secret: str | None = None,
+        request_token_secret: str | None = None,
         board_id: str | None = None,
         status_list_ids: dict[str, str] | None = None,
         interactive: bool = False,
@@ -66,6 +68,10 @@ class TrelloClient(Client):
         self._default_board_id = board_id
         self._status_list_ids = status_list_ids or {}
         self.interactive = interactive
+        # state var for OAuth flow
+        self._request_token_secret = request_token_secret
+        self._request_token = None
+
         self._oauth = None
         if self._access_token and self._access_token_secret and secret:
             self._oauth = OAuth1(api_key, secret, self._access_token, self._access_token_secret)
@@ -79,21 +85,25 @@ class TrelloClient(Client):
         if not self.secret:
             raise ValueError("Secret is required for OAuth")
         oauth = OAuth1Session(self.api_key, client_secret=self.secret, callback_uri=callback_url)
-        request_token_url = f"{BASE_URL}/OAuthGetRequestToken"
+        request_token_url = f"{OAUTH_BASE_URL}/OAuthGetRequestToken"
         fetch_response = oauth.fetch_request_token(request_token_url)
         self._request_token = fetch_response.get('oauth_token')
         self._request_token_secret = fetch_response.get('oauth_token_secret')
-        authorization_url = f"{BASE_URL}/OAuthAuthorizeToken?oauth_token={self._request_token}"
+        authorization_url = f"{OAUTH_BASE_URL}/OAuthAuthorizeToken?oauth_token={self._request_token}"
         return authorization_url
-
+    # extract and save secret after getting url
+    @property 
+    def request_token_secret(self) -> str | None:
+        return self._request_token_secret
+    
     def exchange_request_token(self, oauth_token: str, oauth_verifier: str) -> None:
-        if not self.secret or not self._request_token or not self._request_token_secret:
-            raise ValueError("OAuth flow not initialized")
+        if not self.secret or not self._request_token_secret:
+            raise ValueError("OAuth secret and request_token_secret are required to exchange tokens.")
         oauth = OAuth1Session(self.api_key, client_secret=self.secret,
                               resource_owner_key=self._request_token,
                               resource_owner_secret=self._request_token_secret,
                               verifier=oauth_verifier)
-        access_token_url = f"{BASE_URL}/OAuthGetAccessToken"
+        access_token_url = f"{OAUTH_BASE_URL}/OAuthGetAccessToken"
         oauth_tokens = oauth.fetch_access_token(access_token_url)
         self._access_token = oauth_tokens.get('oauth_token')
         self._access_token_secret = oauth_tokens.get('oauth_token_secret')
@@ -272,6 +282,8 @@ def get_client_impl(**kwargs: Any) -> Client:  # noqa: ANN401
         **kwargs: Configuration dictionary. Must contain:
             - api_key: Trello API key
             - token: Trello token
+            - secret: Trello API secret (for OAuth)
+            - request_token_secret: Trello request token secret (for OAuth)
             - board_id (optional): Default board ID
             - status_list_ids (optional): Map status name -> list ID for update_status
             - interactive (optional): Whether to enable interactive mode
@@ -280,19 +292,28 @@ def get_client_impl(**kwargs: Any) -> Client:  # noqa: ANN401
         TrelloClient instance
 
     Raises:
-        ValueError: If required credentials (api_key, token) are missing
+        ValueError: If required credentials (api_key) is missing
 
     """
     api_key = kwargs.get("api_key")
     token = kwargs.get("token")
-    if not api_key or not token:
+    secret = kwargs.get("secret")
+    request_token_secret = kwargs.get("request_token_secret")
+    if not api_key:
         raise ValueError(
-            "Trello requires 'api_key' and 'token' in configuration. "
+            "Issue Tracker requires 'api_key' in configuration. "
             f"Got: {set(kwargs.keys())}"
+        )
+    if not token and not secret:
+        raise ValueError(
+            "Issue Tracker requires either 'token' (for authenticated requests) "
+            "or 'secret' (to initiate OAuth flow) in configuration."
         )
     return TrelloClient(
         api_key=api_key,
         token=token,
+        secret=secret,
+        request_token_secret=request_token_secret,
         board_id=kwargs.get("board_id"),
         status_list_ids=kwargs.get("status_list_ids"),
         interactive=kwargs.get("interactive", False),
