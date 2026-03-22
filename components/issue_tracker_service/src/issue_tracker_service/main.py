@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from trello_client_impl.client import TrelloClient
 from .routes.health import router as health_router
-from .routes.auth import router as auth_router
+from .routes.auth import _trello_config, router as auth_router
 
 
 app = FastAPI(title="Issue Tracker Service", version="0.1.0")
