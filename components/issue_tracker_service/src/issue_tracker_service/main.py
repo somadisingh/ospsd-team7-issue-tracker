@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from typing import Dict, List, Optional
-from urllib.parse import parse_qs, urlparse
-from uuid import uuid4
 
 import issue_tracker_client_api
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
@@ -10,26 +8,18 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from trello_client_impl.client import TrelloClient
+from .routes.health import router as health_router
+from .routes.auth import router as auth_router
 
 
 app = FastAPI(title="Issue Tracker Service", version="0.1.0")
 
+# Include routers
+app.include_router(health_router)
+app.include_router(auth_router)
+
 # In-memory state (mini-demo). Replace with per-user DB for production.
-oauth1_request_secrets: Dict[str, str] = {}
 user_sessions: Dict[str, Dict[str, str]] = {}
-
-
-def _trello_config() -> Dict[str, str]:
-    from os import environ
-
-    try:
-        return {
-            "api_key": environ["TRELLO_API_KEY"],
-            "secret": environ["TRELLO_API_SECRET"],
-            "callback_url": environ.get("TRELLO_CALLBACK_URL", "http://localhost:8000/auth/callback"),
-        }
-    except KeyError as exc:
-        raise RuntimeError("Missing Trello OAuth credentials in environment") from exc
 
 
 def _board_to_response(board: issue_tracker_client_api.Board) -> BoardResponse:
@@ -98,63 +88,6 @@ class CreateIssueRequest(BaseModel):
 
 class UpdateStatusRequest(BaseModel):
     status: str
-
-
-class AuthCallbackResponse(BaseModel):
-    session_token: str
-    session_user_token: str
-
-
-@app.get("/health")
-async def health() -> Dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.get("/auth/login")
-async def auth_login() -> RedirectResponse:
-    config = _trello_config()
-    client = TrelloClient(api_key=config["api_key"], secret=config["secret"])
-    auth_url = client.get_authorization_url(callback_url=config["callback_url"])
-    parsed = parse_qs(urlparse(auth_url).query)
-    request_token = parsed.get("oauth_token", [None])[0]
-    if not request_token:
-        raise HTTPException(status_code=500, detail="Failed to fetch oauth_token from Trello")
-
-    if not client.request_token_secret:
-        raise HTTPException(status_code=500, detail="Missing request token secret from Trello client")
-
-    oauth1_request_secrets[request_token] = client.request_token_secret
-
-    return RedirectResponse(auth_url)
-
-
-@app.get("/auth/callback", response_model=AuthCallbackResponse)
-async def auth_callback(
-    oauth_token: str = Query(...),
-    oauth_verifier: str = Query(...),
-) -> AuthCallbackResponse:
-    config = _trello_config()
-    request_token_secret = oauth1_request_secrets.pop(oauth_token, None)
-    if not request_token_secret:
-        raise HTTPException(status_code=400, detail="Unknown or expired oauth_token")
-
-    client = TrelloClient(
-        api_key=config["api_key"],
-        secret=config["secret"],
-        request_token_secret=request_token_secret,
-    )
-    client.exchange_request_token(oauth_token=oauth_token, oauth_verifier=oauth_verifier)
-
-    if not client.token or not client.access_token_secret:
-        raise HTTPException(status_code=500, detail="Failed to obtain access token")
-
-    session_token = uuid4().hex
-    user_sessions[session_token] = {
-        "access_token": client.token,
-        "access_token_secret": client.access_token_secret,
-    }
-
-    return AuthCallbackResponse(session_token=session_token, session_user_token=client.token)
 
 
 def get_authenticated_client(x_session_token: str = Header(..., alias="X-Session-Token")) -> TrelloClient:
