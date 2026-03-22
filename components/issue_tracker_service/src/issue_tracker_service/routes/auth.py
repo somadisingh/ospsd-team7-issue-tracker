@@ -4,11 +4,15 @@ from typing import Any, Dict
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
+from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from trello_client_impl.client import TrelloClient
+
+# Load .env file at module import time
+load_dotenv()
 
 # In-memory OAuth state management (mini-demo)
 # In production, use a database with expiration
@@ -26,7 +30,7 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
 def _trello_config() -> Dict[str, str]:
-    """Load Trello OAuth credentials from environment.
+    """Load Trello OAuth credentials from environment or .env file.
 
     Returns:
         Dictionary with api_key, secret, and callback_url.
@@ -34,16 +38,22 @@ def _trello_config() -> Dict[str, str]:
     Raises:
         RuntimeError: If required environment variables are missing.
     """
-    from os import environ
+    import os
 
-    try:
-        return {
-            "api_key": environ["TRELLO_API_KEY"],
-            "secret": environ["TRELLO_API_SECRET"],
-            "callback_url": environ.get("TRELLO_CALLBACK_URL", "http://localhost:8000/auth/callback"),
-        }
-    except KeyError as exc:
-        raise RuntimeError("Missing Trello OAuth credentials in environment") from exc
+    api_key = os.getenv("TRELLO_API_KEY")
+    secret = os.getenv("TRELLO_API_SECRET")
+
+    if not api_key or not secret:
+        raise RuntimeError(
+            "Missing Trello OAuth credentials. "
+            "Set TRELLO_API_KEY and TRELLO_API_SECRET in environment or .env file."
+        )
+
+    return {
+        "api_key": api_key,
+        "secret": secret,
+        "callback_url": os.getenv("TRELLO_CALLBACK_URL", "http://localhost:8000/auth/callback"),
+    }
 
 
 @router.get("/login")
