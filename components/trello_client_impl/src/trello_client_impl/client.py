@@ -18,7 +18,7 @@ from .list import TrelloList, _is_trello_list_response
 from .member import TrelloMember, _is_trello_member_response
 
 BASE_URL = "https://api.trello.com/1"
-OAUTH_BASE_URL = "https://trello.com/1" # OAuth endpoints have separate base URL
+OAUTH_BASE_URL = "https://trello.com/1"  # OAuth endpoints have separate base URL
 
 
 class TrelloClient(Client):
@@ -78,8 +78,6 @@ class TrelloClient(Client):
         elif self._access_token and not self._access_token_secret:
             # Old way, no OAuth
             pass
-        self._request_token = None
-        self._request_token_secret = None
 
     def get_authorization_url(self, callback_url: str | None = None) -> str:
         if not self.secret:
@@ -87,26 +85,43 @@ class TrelloClient(Client):
         oauth = OAuth1Session(self.api_key, client_secret=self.secret, callback_uri=callback_url)
         request_token_url = f"{OAUTH_BASE_URL}/OAuthGetRequestToken"
         fetch_response = oauth.fetch_request_token(request_token_url)
-        self._request_token = fetch_response.get('oauth_token')
-        self._request_token_secret = fetch_response.get('oauth_token_secret')
+        self._request_token = fetch_response.get("oauth_token")
+        self._request_token_secret = fetch_response.get("oauth_token_secret")
+        if not self._request_token or not self._request_token_secret:
+            msg = "Trello OAuth did not return request token and secret"
+            raise ValueError(msg)
         authorization_url = f"{OAUTH_BASE_URL}/OAuthAuthorizeToken?oauth_token={self._request_token}"
         return authorization_url
-    # extract and save secret after getting url
+
     @property 
     def request_token_secret(self) -> str | None:
         return self._request_token_secret
+
+    @property
+    def access_token_secret(self) -> str | None:
+        return self._access_token_secret
     
     def exchange_request_token(self, oauth_token: str, oauth_verifier: str) -> None:
         if not self.secret or not self._request_token_secret:
             raise ValueError("OAuth secret and request_token_secret are required to exchange tokens.")
-        oauth = OAuth1Session(self.api_key, client_secret=self.secret,
-                              resource_owner_key=self._request_token,
-                              resource_owner_secret=self._request_token_secret,
-                              verifier=oauth_verifier)
+        if self._request_token and self._request_token != oauth_token:
+            raise ValueError("OAuth token mismatch for current OAuth session.")
+
+        oauth = OAuth1Session(
+            self.api_key,
+            client_secret=self.secret,
+            resource_owner_key=oauth_token,
+            resource_owner_secret=self._request_token_secret,
+            verifier=oauth_verifier,
+        )
         access_token_url = f"{OAUTH_BASE_URL}/OAuthGetAccessToken"
         oauth_tokens = oauth.fetch_access_token(access_token_url)
-        self._access_token = oauth_tokens.get('oauth_token')
-        self._access_token_secret = oauth_tokens.get('oauth_token_secret')
+        self._access_token = oauth_tokens.get("oauth_token")
+        self._access_token_secret = oauth_tokens.get("oauth_token_secret")
+        if not self._access_token or not self._access_token_secret:
+            raise ValueError("Trello OAuth did not return access token and secret")
+
+        self._request_token = oauth_token
         self._oauth = OAuth1(self.api_key, self.secret, self._access_token, self._access_token_secret)
 
     @property

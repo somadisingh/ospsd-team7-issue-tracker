@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
-from dataclasses import dataclass
 from typing import Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 import issue_tracker_client_api
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from trello_client_impl.client import TrelloClient
@@ -145,16 +143,15 @@ async def auth_callback(
         secret=config["secret"],
         request_token_secret=request_token_secret,
     )
-    client._request_token = oauth_token
     client.exchange_request_token(oauth_token=oauth_token, oauth_verifier=oauth_verifier)
 
-    if not client.token or not client._access_token_secret:
+    if not client.token or not client.access_token_secret:
         raise HTTPException(status_code=500, detail="Failed to obtain access token")
 
     session_token = uuid4().hex
     user_sessions[session_token] = {
         "access_token": client.token,
-        "access_token_secret": client._access_token_secret,
+        "access_token_secret": client.access_token_secret,
     }
 
     return AuthCallbackResponse(session_token=session_token, session_user_token=client.token)
