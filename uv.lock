@@ -373,7 +373,7 @@ provides-extras = ["dev"]
 [[package]]
 name = "issue-tracker-service"
 version = "0.1.0"
-source = { virtual = "components/issue_tracker_service" }
+source = { editable = "components/issue_tracker_service" }
 dependencies = [
     { name = "fastapi" },
     { name = "issue-tracker-client-api" },

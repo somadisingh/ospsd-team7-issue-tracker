@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
