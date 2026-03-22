@@ -1,7 +1,6 @@
 """OAuth 1.0 authentication routes."""
 
-import logging
-from typing import Annotated
+# import logging
 from typing import Any, Dict
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
@@ -17,7 +16,7 @@ from trello_client_impl.client import TrelloClient
 load_dotenv()
 
 # Configure logging
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
 # In-memory OAuth state management (mini-demo)
 # In production, use a database with expiration
@@ -28,7 +27,7 @@ class AuthCallbackResponse(BaseModel):
     """OAuth callback response with session token."""
 
     session_token: str = Field(description="Server session identifier used for subsequent API calls.")
-    session_user_token: str = Field(description="Trello OAuth access token associated with the session.")
+    # session_user_token: str = Field(description="Trello OAuth access token associated with the session.")
 
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -85,31 +84,25 @@ async def auth_login() -> RedirectResponse:
         raise HTTPException(status_code=500, detail="Missing request token secret from Trello client")
 
     oauth1_request_secrets[request_token] = client.request_token_secret
-    logger.info(f"Stored request_token: {request_token}")
-    logger.info(f"Available tokens in cache: {list(oauth1_request_secrets.keys())}")
+    # logger.info(f"Stored request_token: {request_token}")
+    # logger.info(f"Available tokens in cache: {list(oauth1_request_secrets.keys())}")
 
     return RedirectResponse(url=auth_url, status_code=302)
 
 
 @router.get("/callback", response_model=AuthCallbackResponse)
 async def auth_callback(
-    oauth_token: Annotated[
-        str,
-        Query(
+    oauth_token: str = Query(
         ...,
         description=(
             "Request token returned by Trello on redirect to /auth/callback. "
             "Do not use session_token or session_user_token here."
         ),
-        ),
-    ],
-    oauth_verifier: Annotated[
-        str,
-        Query(
+    ),
+    oauth_verifier: str = Query(
         ...,
         description="Verifier returned by Trello on redirect to /auth/callback for the same login attempt.",
-        ),
-    ],
+    ),
 ) -> AuthCallbackResponse:
     """Handle OAuth callback from Trello.
 
@@ -129,13 +122,13 @@ async def auth_callback(
     # Import here to avoid circular imports
     from issue_tracker_service.main import user_sessions
 
-    logger.info(f"Callback received with oauth_token: {oauth_token}")
-    logger.info(f"Available tokens in cache: {list(oauth1_request_secrets.keys())}")
+    # logger.info(f"Callback received with oauth_token: {oauth_token}")
+    # logger.info(f"Available tokens in cache: {list(oauth1_request_secrets.keys())}")
 
     config = _trello_config()
     request_token_secret = oauth1_request_secrets.pop(oauth_token, None)
     if not request_token_secret:
-        logger.error(f"Token not found: {oauth_token}. Cache contents: {list(oauth1_request_secrets.keys())}")
+        # logger.error(f"Token not found: {oauth_token}. Cache contents: {list(oauth1_request_secrets.keys())}")
         raise HTTPException(
             status_code=400,
             detail=(
@@ -160,4 +153,5 @@ async def auth_callback(
         "access_token_secret": client.access_token_secret,
     }
 
-    return AuthCallbackResponse(session_token=session_token, session_user_token=client.token)
+    # return AuthCallbackResponse(session_token=session_token, session_user_token=client.token)
+    return AuthCallbackResponse(session_token=session_token)
