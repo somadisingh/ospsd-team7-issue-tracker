@@ -39,7 +39,7 @@ jobs:
 
       - run:
           name: Mypy (static type checking)
-          command: uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src
+          command: uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src components/issue_tracker_service/src
 
   test:
     docker:
@@ -100,9 +100,31 @@ jobs:
           destination: coverage-report
           when: always
 
+  health_check:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run:
+          name: Install uv
+          command: |
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> $BASH_ENV
+            source $BASH_ENV
+      - run:
+          name: Install dependencies
+          command: uv sync --all-extras
+      - run:
+          name: Start service and health check
+          command: |
+            uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port 8000 &
+            sleep 5
+            curl -sf http://localhost:8000/health || exit 1
+
 workflows:
   version: 2
   ci:
     jobs:
       - lint
       - test
+      - health_check

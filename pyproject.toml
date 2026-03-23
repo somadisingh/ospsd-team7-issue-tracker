@@ -85,7 +85,7 @@ ignore = [
 [tool.mypy]
 strict = true
 explicit_package_bases = true  # Required for src layout
-mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src"]
+mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src", "components/issue_tracker_service/src"]
 ignore_missing_imports = false
 warn_unused_ignores = false
 show_error_codes = true
