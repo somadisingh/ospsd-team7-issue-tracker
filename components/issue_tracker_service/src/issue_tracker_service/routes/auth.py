@@ -1,7 +1,7 @@
 """OAuth 1.0 authentication routes."""
 
 # import logging
-from typing import Any, Dict
+from typing import Dict
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 

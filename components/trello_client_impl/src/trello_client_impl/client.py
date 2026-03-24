@@ -54,6 +54,7 @@ class TrelloClient(Client):
             status_list_ids: Optional mapping of status name to list ID for
                 update_status (e.g. {"todo": "id1", "in_progress": "id2", "complete": "id3"}).
                 When set, update_status moves the issue to the list for that status.
+            request_token_secret: OAuth request token secret (for OAuth flow).
             interactive: Whether to enable interactive mode
 
         """
@@ -90,17 +91,16 @@ class TrelloClient(Client):
         if not self._request_token or not self._request_token_secret:
             msg = "Trello OAuth did not return request token and secret"
             raise ValueError(msg)
-        authorization_url = f"{OAUTH_BASE_URL}/OAuthAuthorizeToken?oauth_token={self._request_token}"
-        return authorization_url
+        return f"{OAUTH_BASE_URL}/OAuthAuthorizeToken?oauth_token={self._request_token}"
 
-    @property 
+    @property
     def request_token_secret(self) -> str | None:
         return self._request_token_secret
 
     @property
     def access_token_secret(self) -> str | None:
         return self._access_token_secret
-    
+
     def exchange_request_token(self, oauth_token: str, oauth_verifier: str) -> None:
         if not self.secret or not self._request_token_secret:
             raise ValueError("OAuth secret and request_token_secret are required to exchange tokens.")
@@ -152,8 +152,6 @@ class TrelloClient(Client):
             json=json_payload,
             auth=self._oauth,
         )
-        #     timeout=30,
-        # )
         resp.raise_for_status()
         return resp.json() if resp.content else None
 

@@ -121,6 +121,23 @@ jobs:
             sleep 5
             curl -sf http://localhost:8000/health || exit 1
 
+  deploy:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - run:
+          name: Trigger Render deploy
+          command: |
+            if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+              echo "RENDER_DEPLOY_HOOK_URL not set; skipping deploy"
+              exit 0
+            fi
+            curl -X POST -f -s -o /dev/null -w "%{http_code}" "$RENDER_DEPLOY_HOOK_URL" | grep -qE '^2[0-9]{2}$' || {
+              echo "Render deploy hook returned non-2xx"
+              exit 1
+            }
+            echo "Render deploy triggered successfully"
+
 workflows:
   version: 2
   ci:
@@ -128,3 +145,8 @@ workflows:
       - lint
       - test
       - health_check
+      - deploy:
+          requires:
+            - lint
+            - test
+            - health_check

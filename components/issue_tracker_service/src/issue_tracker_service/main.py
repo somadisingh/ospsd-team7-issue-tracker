@@ -4,7 +4,6 @@ from typing import Dict, List, Optional
 
 import issue_tracker_client_api
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from trello_client_impl.client import TrelloClient
