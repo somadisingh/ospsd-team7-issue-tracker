@@ -40,7 +40,10 @@ def _issue_to_response(issue: issue_tracker_client_api.Issue) -> IssueResponse:
 
 
 def _member_to_response(member: issue_tracker_client_api.Member) -> MemberResponse:
-    return MemberResponse(id=member.id, full_name=member.full_name, username=member.username)
+    return MemberResponse(
+        id=member.id,
+        username=member.username or "",
+    )
 
 
 class BoardResponse(BaseModel):
@@ -66,7 +69,6 @@ class IssueResponse(BaseModel):
 
 class MemberResponse(BaseModel):
     id: str
-    full_name: str
     username: str
 
 

@@ -10,7 +10,7 @@ from typing import Any
 import issue_tracker_client_api
 import requests
 from issue_tracker_client_api import Board, Client, Issue, List, Member
-from requests_oauthlib import OAuth1, OAuth1Session
+from requests_oauthlib import OAuth1, OAuth1Session  # type: ignore[import-untyped]
 
 from .board import TrelloBoard, _is_trello_board_response
 from .issue import TrelloCard, _is_trello_card_response
@@ -71,7 +71,7 @@ class TrelloClient(Client):
         self.interactive = interactive
         # state var for OAuth flow
         self._request_token_secret = request_token_secret
-        self._request_token = None
+        self._request_token: str | None = None
 
         self._oauth = None
         if self._access_token and self._access_token_secret and secret:
