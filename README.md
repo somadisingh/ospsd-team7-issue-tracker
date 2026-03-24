@@ -218,3 +218,24 @@ Welcome to the repository for Team 7! This project focuses on developing an inte
    
 ## LICENSE
 [MIT LICENSE] - see the [LICENSE](LICENSE) file for details.
+
+## Deployment
+
+Deployment for this project is already set up for both Render and CircleCI.
+
+### How Deployment is Handled
+
+- **Render:**  
+  The codebase is configured for easy deployment on [Render](https://render.com) as a web service. Once you link your GitHub repository to Render and provide the required environment variables (`TRELLO_API_KEY`, `TRELLO_API_SECRET`, etc.), Render automatically installs dependencies, performs the initial database migration if necessary, and launches the service using Gunicorn and Uvicorn.  
+  You can find the recommended build and start commands, as well as environment configuration tips, in the deployment instructions above.
+
+- **CircleCI:**  
+  We use [CircleCI](https://circleci.com) for continuous integration. On every push to the repository, CircleCI runs all linting, formatting, type checking, and testing jobs (unit, integration, and e2e, if credentials are present). CI is configured in the [`.circleci/config.yml`](.circleci/config.yml) file.  
+  For continuous deployment, CircleCI can notify Render to trigger a redeploy via a [Render Deploy Hook](https://render.com/docs/deploy-hooks) after successful checks. This is achieved with a simple `curl` command step in the CircleCI pipeline that calls the Render deploy hook URL.
+
+**In summary:**
+- Push code → CircleCI runs checks/tests → (Optional) CircleCI notifies Render to deploy → Render automatically builds and serves the app.
+
+For more details, review `docs/ci-cd.md` and the [project README deployment instructions](#deployment).
+
+If you wish to modify or extend deployment, refer to the configuration in `.circleci/config.yml` and your Render dashboard settings.
