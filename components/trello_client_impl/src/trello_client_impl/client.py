@@ -75,7 +75,9 @@ class TrelloClient(Client):
 
         self._oauth = None
         if self._access_token and self._access_token_secret and secret:
-            self._oauth = OAuth1(api_key, secret, self._access_token, self._access_token_secret)
+            self._oauth = OAuth1(
+                api_key, secret, self._access_token, self._access_token_secret
+            )
         elif self._access_token and not self._access_token_secret:
             # Old way, no OAuth
             pass
@@ -83,7 +85,9 @@ class TrelloClient(Client):
     def get_authorization_url(self, callback_url: str | None = None) -> str:
         if not self.secret:
             raise ValueError("Secret is required for OAuth")
-        oauth = OAuth1Session(self.api_key, client_secret=self.secret, callback_uri=callback_url)
+        oauth = OAuth1Session(
+            self.api_key, client_secret=self.secret, callback_uri=callback_url
+        )
         request_token_url = f"{OAUTH_BASE_URL}/OAuthGetRequestToken"
         fetch_response = oauth.fetch_request_token(request_token_url)
         self._request_token = fetch_response.get("oauth_token")
@@ -103,7 +107,9 @@ class TrelloClient(Client):
 
     def exchange_request_token(self, oauth_token: str, oauth_verifier: str) -> None:
         if not self.secret or not self._request_token_secret:
-            raise ValueError("OAuth secret and request_token_secret are required to exchange tokens.")
+            raise ValueError(
+                "OAuth secret and request_token_secret are required to exchange tokens."
+            )
         if self._request_token and self._request_token != oauth_token:
             raise ValueError("OAuth token mismatch for current OAuth session.")
 
@@ -122,7 +128,9 @@ class TrelloClient(Client):
             raise ValueError("Trello OAuth did not return access token and secret")
 
         self._request_token = oauth_token
-        self._oauth = OAuth1(self.api_key, self.secret, self._access_token, self._access_token_secret)
+        self._oauth = OAuth1(
+            self.api_key, self.secret, self._access_token, self._access_token_secret
+        )
 
     @property
     def token(self) -> str | None:

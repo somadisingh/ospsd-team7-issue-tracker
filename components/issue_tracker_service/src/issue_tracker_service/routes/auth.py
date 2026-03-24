@@ -49,8 +49,7 @@ def _trello_config() -> Dict[str, str]:
 
     if not api_key or not secret:
         raise RuntimeError(
-            "Missing Trello OAuth credentials. "
-            "Set TRELLO_API_KEY and TRELLO_API_SECRET in environment or .env file."
+            "Missing Trello OAuth credentials. Set TRELLO_API_KEY and TRELLO_API_SECRET in environment or .env file."
         )
 
     return {

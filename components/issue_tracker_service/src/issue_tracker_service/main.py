@@ -150,7 +150,9 @@ async def get_issue(issue_id: str, client: TrelloClient = Depends(get_authentica
 
 
 @app.post("/issues", response_model=IssueResponse)
-async def create_issue(req: CreateIssueRequest, client: TrelloClient = Depends(get_authenticated_client)) -> IssueResponse:
+async def create_issue(
+    req: CreateIssueRequest, client: TrelloClient = Depends(get_authenticated_client)
+) -> IssueResponse:
     issue = client.create_issue(title=req.title, list_id=req.list_id, description=req.description)
     return _issue_to_response(issue)
 
@@ -172,12 +174,16 @@ async def delete_issue(issue_id: str, client: TrelloClient = Depends(get_authent
 
 
 @app.get("/issues/{issue_id}/members", response_model=List[MemberResponse])
-async def get_issue_members(issue_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> list[MemberResponse]:
+async def get_issue_members(
+    issue_id: str, client: TrelloClient = Depends(get_authenticated_client)
+) -> list[MemberResponse]:
     members = client.get_members_on_issue(issue_id)
     return [_member_to_response(m) for m in members]
 
 
 @app.post("/issues/{issue_id}/assign", response_model=Dict[str, bool])
-async def assign_issue(issue_id: str, member_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> Dict[str, bool]:
+async def assign_issue(
+    issue_id: str, member_id: str, client: TrelloClient = Depends(get_authenticated_client)
+) -> Dict[str, bool]:
     success = client.assign_issue(issue_id=issue_id, member_id=member_id)
     return {"success": success}

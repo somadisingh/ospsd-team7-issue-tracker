@@ -17,7 +17,7 @@ async def root() -> RedirectResponse:
 @router.get("/health")
 async def health() -> Dict[str, str]:
     """Health check endpoint for liveness probes.
-    
+
     Returns:
         {"status": "ok"} if service is healthy.
     """
