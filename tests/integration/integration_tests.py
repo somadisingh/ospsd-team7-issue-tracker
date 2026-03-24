@@ -1,10 +1,21 @@
 """Integration tests for the issue tracker components."""
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
+from issue_tracker_adapter import ServiceClientAdapter
+from issue_tracker_adapter import register as adapter_register
+from issue_tracker_adapter.board import ServiceBoard
+from issue_tracker_adapter.client import get_client_impl as adapter_get_client_impl
+from issue_tracker_adapter.issue import ServiceIssue
+from issue_tracker_adapter.list import ServiceList
+from issue_tracker_adapter.member import ServiceMember
 from issue_tracker_client_api import Board, Client, Issue, List, Member
+from issue_tracker_service_client.models.board_response import BoardResponse
+from issue_tracker_service_client.models.issue_response import IssueResponse
+from issue_tracker_service_client.models.list_response import ListResponse
+from issue_tracker_service_client.models.member_response import MemberResponse
 from pytest_mock import MockerFixture
 from trello_client_impl import (
     TrelloBoard,
@@ -252,3 +263,171 @@ class TestFactoryFunctions:
         client = get_client_impl(**integration_credentials)
         issue = client.get_issue("test_id")
         assert issue is not None
+
+
+# ======================================================================
+# Adapter component integration tests
+# ======================================================================
+
+
+@pytest.mark.integration
+class TestAdapterInterfaceImplementation:
+    """Test that ServiceClientAdapter properly implements the Client interface."""
+
+    def test_adapter_is_instance_of_client(self) -> None:
+        adapter = ServiceClientAdapter(
+            base_url="https://example.com",
+            session_token="tok",
+        )
+        assert isinstance(adapter, Client)
+
+    def test_adapter_implements_all_methods(self) -> None:
+        adapter = ServiceClientAdapter(
+            base_url="https://example.com",
+            session_token="tok",
+        )
+        required_methods = [
+            "get_issue",
+            "delete_issue",
+            "update_status",
+            "get_board",
+            "get_boards",
+            "create_board",
+            "add_member_to_board",
+            "get_list",
+            "get_lists",
+            "get_issues_in_list",
+            "create_list",
+            "update_list",
+            "delete_list",
+            "get_members_on_issue",
+            "assign_issue",
+            "create_issue",
+        ]
+        for method in required_methods:
+            assert hasattr(adapter, method)
+            assert callable(getattr(adapter, method))
+
+
+@pytest.mark.integration
+class TestAdapterDomainObjects:
+    """Test that adapter domain objects implement the correct interfaces."""
+
+    def test_service_board_is_instance_of_board(self) -> None:
+        board = ServiceBoard(id="b1", name="Test")
+        assert isinstance(board, Board)
+
+    def test_service_issue_is_instance_of_issue(self) -> None:
+        issue = ServiceIssue(
+            id="i1",
+            title="T",
+            is_complete=False,
+            list_id="l1",
+            board_id="b1",
+        )
+        assert isinstance(issue, Issue)
+
+    def test_service_list_is_instance_of_list(self) -> None:
+        lst = ServiceList(id="l1", name="To Do", board_id="b1")
+        assert isinstance(lst, List)
+
+    def test_service_member_is_instance_of_member(self) -> None:
+        member = ServiceMember(id="m1", username="alice")
+        assert isinstance(member, Member)
+
+
+@pytest.mark.integration
+class TestAdapterFactoryAndRegistration:
+    """Test adapter factory function and DI registration."""
+
+    def test_adapter_factory_returns_client(self) -> None:
+        client = adapter_get_client_impl(
+            base_url="https://example.com",
+            session_token="tok",
+        )
+        assert isinstance(client, Client)
+        assert isinstance(client, ServiceClientAdapter)
+
+    def test_adapter_register_replaces_global_factory(self) -> None:
+        import issue_tracker_client_api
+
+        original = issue_tracker_client_api.get_client
+        try:
+            adapter_register()
+            client = issue_tracker_client_api.get_client(
+                base_url="https://example.com",
+                session_token="tok",
+            )
+            assert isinstance(client, ServiceClientAdapter)
+        finally:
+            issue_tracker_client_api.get_client = original
+
+    @patch("issue_tracker_adapter.client.list_boards_api")
+    def test_adapter_get_boards_with_service_client(self, mock_api: MagicMock) -> None:
+        """Verify adapter correctly converts auto-generated BoardResponse to Board ABC."""
+        resp = MagicMock(spec=BoardResponse)
+        resp.id = "b1"
+        resp.name = "Board"
+        mock_api.sync.return_value = [resp]
+
+        client = adapter_get_client_impl(
+            base_url="https://example.com",
+            session_token="tok",
+        )
+        boards = list(client.get_boards())
+        assert len(boards) == 1
+        assert isinstance(boards[0], Board)
+        assert boards[0].id == "b1"
+
+    @patch("issue_tracker_adapter.client.get_issue_api")
+    def test_adapter_get_issue_with_service_client(self, mock_api: MagicMock) -> None:
+        """Verify adapter correctly converts auto-generated IssueResponse to Issue ABC."""
+        resp = MagicMock(spec=IssueResponse)
+        resp.id = "i1"
+        resp.title = "Task"
+        resp.is_complete = False
+        resp.list_id = "l1"
+        resp.board_id = "b1"
+        mock_api.sync.return_value = resp
+
+        client = adapter_get_client_impl(
+            base_url="https://example.com",
+            session_token="tok",
+        )
+        issue = client.get_issue("i1")
+        assert isinstance(issue, Issue)
+        assert issue.title == "Task"
+
+    @patch("issue_tracker_adapter.client.get_list_api")
+    def test_adapter_get_list_with_service_client(self, mock_api: MagicMock) -> None:
+        """Verify adapter correctly converts auto-generated ListResponse to List ABC."""
+        resp = MagicMock(spec=ListResponse)
+        resp.id = "l1"
+        resp.name = "To Do"
+        resp.board_id = "b1"
+        mock_api.sync.return_value = resp
+
+        client = adapter_get_client_impl(
+            base_url="https://example.com",
+            session_token="tok",
+        )
+        lst = client.get_list("l1")
+        assert isinstance(lst, List)
+        assert lst.name == "To Do"
+
+    @patch("issue_tracker_adapter.client.get_members_api")
+    def test_adapter_get_members_with_service_client(self, mock_api: MagicMock) -> None:
+        """Verify adapter correctly converts auto-generated MemberResponse to Member ABC."""
+        resp = MagicMock(spec=MemberResponse)
+        resp.id = "m1"
+        resp.username = "alice"
+        mock_api.sync.return_value = [resp]
+
+        client = adapter_get_client_impl(
+            base_url="https://example.com",
+            session_token="tok",
+        )
+        members = client.get_members_on_issue("i1")
+        assert len(members) == 1
+        assert isinstance(members[0], Member)
+        assert members[0].username == "alice"

@@ -10,14 +10,14 @@ This document describes the system design architecture for the issue tracker cli
 
 ### Recommended Interfaces (Abstract Base Classes)
 
-| Interface | Purpose | Concrete Implementation |
-|-----------|---------|-------------------------|
-| **Client** | Contract for issue tracker operations (get issues, boards, members, update status, assign) | `TrelloClient` |
-| **Issue** | Contract for issue representation (`id`, `title`, `is_complete`, `list_id`, `board_id`) | `TrelloCard` |
-| **Board** | Contract for board representation (`id`, `name`) | `TrelloBoard` |
-| **List** | Contract for list representation (`id`, `name`, `board_id`) | `TrelloList` |
-| **Member** | Contract for member representation (`id`, `username`, `is_board_member`) | `TrelloMember` |
-| **ClientFactory** | Contract for creating Client instances | `get_client` factory function (Trello) |
+| Interface | Purpose | Concrete Implementations |
+|-----------|---------|--------------------------|
+| **Client** | Contract for issue tracker operations (get issues, boards, members, update status, assign) | `TrelloClient`, `ServiceClientAdapter` |
+| **Issue** | Contract for issue representation (`id`, `title`, `is_complete`, `list_id`, `board_id`) | `TrelloCard`, `ServiceIssue` |
+| **Board** | Contract for board representation (`id`, `name`) | `TrelloBoard`, `ServiceBoard` |
+| **List** | Contract for list representation (`id`, `name`, `board_id`) | `TrelloList`, `ServiceList` |
+| **Member** | Contract for member representation (`id`, `username`, `is_board_member`) | `TrelloMember`, `ServiceMember` |
+| **ClientFactory** | Contract for creating Client instances | `get_client` factory function (Trello or Adapter) |
 
 ### Why These Interfaces?
 
@@ -29,6 +29,28 @@ This document describes the system design architecture for the issue tracker cli
 
 - **TrelloClient, TrelloCard, TrelloBoard, TrelloList, TrelloMember**: These are concrete implementations; they implement interfaces but are not extended by other classes.
 - **Helper/utility classes** (e.g., `_load_token`): Internal implementation details.
+
+---
+
+## Dependency Injection
+
+Implementations register at import time by replacing the global `get_client` factory in `issue_tracker_client_api`. Consumers call `get_client()` and receive whatever implementation was registered — `TrelloClient` (direct) or `ServiceClientAdapter` (via service).
+
+```python
+# Registering the Trello implementation
+import trello_client_impl  # auto-registers on import
+
+# Registering the adapter implementation
+from issue_tracker_adapter import register
+register()
+```
+
+After registration, consumers only depend on the interface:
+
+```python
+from issue_tracker_client_api import get_client
+client = get_client(...)
+```
 
 ---
 
@@ -94,7 +116,9 @@ Both are used appropriately in the architecture.
 
 ---
 
-## 4. Architecture Overview (Trello)
+## 4. Architecture Overview
+
+### Direct Path (Trello Client)
 
 ```
 ┌─────────────────┐     uses      ┌──────────────────┐
@@ -116,6 +140,25 @@ Both are used appropriately in the architecture.
            │ (Issue)      │    │ (Board)      │    │ (Member)     │
            └──────────────┘    └──────────────┘    └──────────────┘
 ```
+
+### Service Path (Adapter)
+
+```
+┌──────────┐  uses  ┌──────────────┐  delegates  ┌───────────────────┐  HTTP  ┌──────────────┐  API  ┌────────┐
+│ Consumer │──────► │ Client ABC   │───────────► │ ServiceClient-    │──────► │ FastAPI      │─────► │ Trello │
+│          │        │ get_client() │             │ Adapter           │        │ Service      │       │ API    │
+└──────────┘        └──────────────┘             └───────────────────┘        └──────────────┘       └────────┘
+                                                       │ uses
+                                                       ▼
+                                                 ┌───────────────────┐
+                                                 │ Auto-Generated    │
+                                                 │ HTTP Client       │
+                                                 │ (openapi-python-  │
+                                                 │  client)          │
+                                                 └───────────────────┘
+```
+
+The adapter achieves **location transparency**: consumer code uses the same `Client` ABC and `get_client()` factory regardless of whether it talks to Trello directly or through the deployed service.
 
 ### UML Class Diagram
 

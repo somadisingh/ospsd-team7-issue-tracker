@@ -39,7 +39,7 @@ jobs:
 
       - run:
           name: Mypy (static type checking)
-          command: uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src components/issue_tracker_service/src
+          command: uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src components/issue_tracker_adapter/src components/issue_tracker_service/src
 
   test:
     docker:

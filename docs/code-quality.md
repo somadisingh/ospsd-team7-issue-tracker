@@ -113,7 +113,7 @@ uv run ruff check --fix --diff .
 [tool.mypy]
 strict = true
 explicit_package_bases = true  # Required for src layout
-mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src"]
+mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src", "components/issue_tracker_adapter/src", "components/issue_tracker_service/src", "components/issue_tracker_service_api_client"]
 ignore_missing_imports = false
 show_error_codes = true
 ```

@@ -7,10 +7,14 @@ requires-python = ">=3.12"
 dependencies = [
     "requests-oauthlib>=1.3.0",
     "issue-tracker-service",
+    "issue-tracker-adapter",
+    "issue-tracker-service-client",
 ]
 
 [tool.uv.sources]
 issue-tracker-service = { workspace = true }
+issue-tracker-adapter = { workspace = true }
+issue-tracker-service-client = { workspace = true }
 
 [project.optional-dependencies]
 dev = [
@@ -32,6 +36,7 @@ members = ["components/*"]
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+exclude = ["components/issue_tracker_service_api_client"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -69,6 +74,7 @@ ignore = [
   "SLF001",  # Private member access — tests verify internal state
   "F841",    # Unused variable — intentional in try/except tests
   "INP001",  # Missing __init__.py — test dirs must not have it
+  "PLC0415", # Import not at top of file — tests may import inside functions for isolation
 ]
 # Trello implementation: similar to tests, but stricter for production code
 "components/trello_client_impl/src/**/*.py" = [
@@ -78,6 +84,14 @@ ignore = [
   "TRY003",  # Long exception messages — user-facing error context
   "BLE001",  # Blind exception catching — network error handling
   "PLR0913", # Too many arguments — Trello Card has many fields
+]
+# Adapter implementation: mirrors trello_client_impl conventions
+"components/issue_tracker_adapter/src/**/*.py" = [
+  "D102",    # Missing method docstring — implementation follows interface
+  "D107",    # Missing __init__ docstring — dataclass/TypedDict
+  "A002",    # id shadows builtin — required for API mapping
+  "TRY003",  # Long exception messages — user-facing error context
+  "PLR0913", # Too many arguments — adapter mirrors interface signature
 ]
 # Conftest: pytest configuration
 "conftest.py" = [
@@ -89,7 +103,7 @@ ignore = [
 [tool.mypy]
 strict = true
 explicit_package_bases = true  # Required for src layout
-mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src", "components/issue_tracker_service/src"]
+mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src", "components/issue_tracker_service/src", "components/issue_tracker_adapter/src", "components/issue_tracker_service_api_client"]
 ignore_missing_imports = false
 warn_unused_ignores = false
 show_error_codes = true
@@ -99,6 +113,9 @@ pythonpath = [
     ".",
     "components/issue_tracker_client_api/src",
     "components/trello_client_impl/src",
+    "components/issue_tracker_adapter/src",
+    "components/issue_tracker_service/src",
+    "components/issue_tracker_service_api_client",
 ]
 testpaths = ["tests", "components/*/tests"]
 python_files = ["*_test.py", "test_*.py", "*_tests.py"]
@@ -125,6 +142,7 @@ omit = [
     "*/tests/*",
     "*/__main__.py",
     "*/site-packages/*",
+    "components/issue_tracker_service_api_client/*",
 ]
 
 [tool.coverage.report]
@@ -145,3 +163,8 @@ exclude_lines = [
 
 [tool.coverage.html]
 directory = "htmlcov"
+
+[dependency-groups]
+dev = [
+    "openapi-python-client>=0.28.3",
+]
