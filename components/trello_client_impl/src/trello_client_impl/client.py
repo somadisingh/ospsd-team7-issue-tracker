@@ -151,6 +151,7 @@ class TrelloClient(Client):
             params=req_params,
             json=json_payload,
             auth=self._oauth,
+            timeout=30,
         )
         resp.raise_for_status()
         return resp.json() if resp.content else None
