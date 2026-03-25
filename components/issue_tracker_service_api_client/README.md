@@ -110,15 +110,26 @@ client.set_httpx_client(httpx.Client(base_url="https://api.example.com", proxies
 ```
 
 ## Building / publishing this package
-This project uses [Poetry](https://python-poetry.org/) to manage dependencies  and packaging.  Here are the basics:
-1. Update the metadata in pyproject.toml (e.g. authors, version)
-1. If you're using a private repository, configure it with Poetry
-    1. `poetry config repositories.<your-repository-name> <url-to-your-repository>`
-    1. `poetry config http-basic.<your-repository-name> <username> <password>`
-1. Publish the client with `poetry publish --build -r <your-repository-name>` or, if for public PyPI, just `poetry publish --build`
+This project uses [Hatchling](https://hatch.pypa.io/) as its build backend and [uv](https://github.com/astral-sh/uv) as the package manager. It is included as a workspace member in the root `pyproject.toml`.
 
-If you want to install this client into another project without publishing it (e.g. for development) then:
-1. If that project **is using Poetry**, you can simply do `poetry add <path-to-this-client>` from that project
-1. If that project is not using Poetry:
-    1. Build a wheel with `poetry build -f wheel`
-    1. Install that wheel from the other project `pip install <path-to-wheel>`
+To install locally as part of the workspace:
+```bash
+uv sync --all-extras
+```
+
+To build a wheel independently:
+```bash
+uv build --package issue-tracker-service-client
+```
+
+## Regenerating this client
+
+This package is auto-generated from the FastAPI service's OpenAPI specification using `openapi-python-client`:
+
+```bash
+# Start the service locally, then:
+uv run openapi-python-client generate \
+    --path /tmp/openapi.json \
+    --output-path components/issue_tracker_service_api_client \
+    --overwrite
+```

@@ -205,43 +205,41 @@ See [docs/ci-cd.md](docs/ci-cd.md) for detailed CI/CD setup instructions.
 - Run full test suite (`uv run pytest`) before pushing to ensure CI compatibility
 - The CircleCI pipeline provides automated validation on every push
 
+## Deployment
+
+The FastAPI service is deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com) with continuous deployment via CircleCI.
+
+| Setting | Value |
+|---|---|
+| **Platform** | [Render](https://render.com) (Web Service) |
+| **Live URL** | `https://ospsd-team7-issue-tracker.onrender.com` |
+| **Health check** | `https://ospsd-team7-issue-tracker.onrender.com/health` |
+| **Build command** | `pip install uv && uv sync --all-extras` |
+| **Start command** | `uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port $PORT` |
+
+### Environment variables (configured in Render dashboard)
+
+| Variable | Description |
+|---|---|
+| `TRELLO_API_KEY` | Trello API key |
+| `TRELLO_API_SECRET` | Trello API secret (consumer secret for OAuth) |
+| `TRELLO_CALLBACK_URL` | OAuth callback URL (e.g. `https://ospsd-team7-issue-tracker.onrender.com/auth/callback`) |
+
+### CI/CD pipeline
+
+Every push triggers the following CircleCI workflow (see [`.circleci/config.yml`](.circleci/config.yml)):
+
+1. **`lint`** — Ruff (check + format) and Mypy
+2. **`test`** — Unit, integration, and E2E tests with coverage reporting
+3. **`health_check`** — Starts the service locally and verifies `GET /health` returns 200
+4. **`deploy`** — Triggers a Render deploy hook (runs only after all three jobs above pass)
+
+### A note on OAuth
+
+Trello's API uses **OAuth 1.0a** (not OAuth 2.0). Our implementation follows the provider's required protocol. The service exposes `/auth/login` (initiate) and `/auth/callback` (exchange tokens) endpoints that handle the full OAuth 1.0a three-legged flow, issuing server-side session tokens for subsequent API calls.
+
+For more details, see [docs/ci-cd.md](docs/ci-cd.md).
+
 ## License
 
 [MIT License](LICENSE)
-* **Somaditya Singh** (`ss20288`)
-* **Saakshi Narayan** (`sn4230`)
-* **Mingjian Li** (`ml8347`)
-* **Joshua Leeman** (`jl17087`)
-* **Riddhi Prasad** (`rrp4822`)
-
-## Project Description
-Welcome to the repository for Team 7! This project focuses on developing an interface and implementation for Trello. Our goal is to collaborate effectively to deliver a robust and scalable solution using the best software development practices.
-
-## Setup Instructions
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/somadisingh/ospsd-team7-issue-tracker.git
-   
-## LICENSE
-[MIT LICENSE] - see the [LICENSE](LICENSE) file for details.
-
-## Deployment
-
-Deployment for this project is already set up for both Render and CircleCI.
-
-### How Deployment is Handled
-
-- **Render:**  
-  The codebase is configured for easy deployment on [Render](https://render.com) as a web service. Once you link your GitHub repository to Render and provide the required environment variables (`TRELLO_API_KEY`, `TRELLO_API_SECRET`, etc.), Render automatically installs dependencies, performs the initial database migration if necessary, and launches the service using Gunicorn and Uvicorn.  
-  You can find the recommended build and start commands, as well as environment configuration tips, in the deployment instructions above.
-
-- **CircleCI:**  
-  We use [CircleCI](https://circleci.com) for continuous integration. On every push to the repository, CircleCI runs all linting, formatting, type checking, and testing jobs (unit, integration, and e2e, if credentials are present). CI is configured in the [`.circleci/config.yml`](.circleci/config.yml) file.  
-  For continuous deployment, CircleCI can notify Render to trigger a redeploy via a [Render Deploy Hook](https://render.com/docs/deploy-hooks) after successful checks. This is achieved with a simple `curl` command step in the CircleCI pipeline that calls the Render deploy hook URL.
-
-**In summary:**
-- Push code → CircleCI runs checks/tests → (Optional) CircleCI notifies Render to deploy → Render automatically builds and serves the app.
-
-For more details, review `docs/ci-cd.md` and the [project README deployment instructions](#deployment).
-
-If you wish to modify or extend deployment, refer to the configuration in `.circleci/config.yml` and your Render dashboard settings.
