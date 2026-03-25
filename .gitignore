@@ -213,3 +213,6 @@ __marimo__/
 # credentials
 credentials.json
 token.json
+
+#oauth test files
+oauth_test.py
