@@ -1,0 +1,180 @@
+from http import HTTPStatus
+from typing import Any
+from urllib.parse import quote
+
+import httpx
+
+from ... import errors
+from ...client import AuthenticatedClient, Client
+from ...models.delete_list_lists_list_id_delete_response_delete_list_lists_list_id_delete import (
+    DeleteListListsListIdDeleteResponseDeleteListListsListIdDelete,
+)
+from ...models.http_validation_error import HTTPValidationError
+from ...types import Response
+
+
+def _get_kwargs(
+    list_id: str,
+    *,
+    x_session_token: str,
+) -> dict[str, Any]:
+    headers: dict[str, Any] = {}
+    headers["X-Session-Token"] = x_session_token
+
+    _kwargs: dict[str, Any] = {
+        "method": "delete",
+        "url": "/lists/{list_id}".format(
+            list_id=quote(str(list_id), safe=""),
+        ),
+    }
+
+    _kwargs["headers"] = headers
+    return _kwargs
+
+
+def _parse_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> DeleteListListsListIdDeleteResponseDeleteListListsListIdDelete | HTTPValidationError | None:
+    if response.status_code == 200:
+        response_200 = DeleteListListsListIdDeleteResponseDeleteListListsListIdDelete.from_dict(response.json())
+
+        return response_200
+
+    if response.status_code == 422:
+        response_422 = HTTPValidationError.from_dict(response.json())
+
+        return response_422
+
+    if client.raise_on_unexpected_status:
+        raise errors.UnexpectedStatus(response.status_code, response.content)
+    else:
+        return None
+
+
+def _build_response(
+    *, client: AuthenticatedClient | Client, response: httpx.Response
+) -> Response[DeleteListListsListIdDeleteResponseDeleteListListsListIdDelete | HTTPValidationError]:
+    return Response(
+        status_code=HTTPStatus(response.status_code),
+        content=response.content,
+        headers=response.headers,
+        parsed=_parse_response(client=client, response=response),
+    )
+
+
+def sync_detailed(
+    list_id: str,
+    *,
+    client: AuthenticatedClient | Client,
+    x_session_token: str,
+) -> Response[DeleteListListsListIdDeleteResponseDeleteListListsListIdDelete | HTTPValidationError]:
+    """Delete List
+
+    Args:
+        list_id (str):
+        x_session_token (str):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Response[DeleteListListsListIdDeleteResponseDeleteListListsListIdDelete | HTTPValidationError]
+    """
+
+    kwargs = _get_kwargs(
+        list_id=list_id,
+        x_session_token=x_session_token,
+    )
+
+    response = client.get_httpx_client().request(
+        **kwargs,
+    )
+
+    return _build_response(client=client, response=response)
+
+
+def sync(
+    list_id: str,
+    *,
+    client: AuthenticatedClient | Client,
+    x_session_token: str,
+) -> DeleteListListsListIdDeleteResponseDeleteListListsListIdDelete | HTTPValidationError | None:
+    """Delete List
+
+    Args:
+        list_id (str):
+        x_session_token (str):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        DeleteListListsListIdDeleteResponseDeleteListListsListIdDelete | HTTPValidationError
+    """
+
+    return sync_detailed(
+        list_id=list_id,
+        client=client,
+        x_session_token=x_session_token,
+    ).parsed
+
+
+async def asyncio_detailed(
+    list_id: str,
+    *,
+    client: AuthenticatedClient | Client,
+    x_session_token: str,
+) -> Response[DeleteListListsListIdDeleteResponseDeleteListListsListIdDelete | HTTPValidationError]:
+    """Delete List
+
+    Args:
+        list_id (str):
+        x_session_token (str):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        Response[DeleteListListsListIdDeleteResponseDeleteListListsListIdDelete | HTTPValidationError]
+    """
+
+    kwargs = _get_kwargs(
+        list_id=list_id,
+        x_session_token=x_session_token,
+    )
+
+    response = await client.get_async_httpx_client().request(**kwargs)
+
+    return _build_response(client=client, response=response)
+
+
+async def asyncio(
+    list_id: str,
+    *,
+    client: AuthenticatedClient | Client,
+    x_session_token: str,
+) -> DeleteListListsListIdDeleteResponseDeleteListListsListIdDelete | HTTPValidationError | None:
+    """Delete List
+
+    Args:
+        list_id (str):
+        x_session_token (str):
+
+    Raises:
+        errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
+        httpx.TimeoutException: If the request takes longer than Client.timeout.
+
+    Returns:
+        DeleteListListsListIdDeleteResponseDeleteListListsListIdDelete | HTTPValidationError
+    """
+
+    return (
+        await asyncio_detailed(
+            list_id=list_id,
+            client=client,
+            x_session_token=x_session_token,
+        )
+    ).parsed

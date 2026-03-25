@@ -431,3 +431,66 @@ class TestAdapterFactoryAndRegistration:
         assert len(members) == 1
         assert isinstance(members[0], Member)
         assert members[0].username == "alice"
+
+    @patch("issue_tracker_adapter.client.get_lists_api")
+    def test_adapter_get_lists_with_service_client(self, mock_api: MagicMock) -> None:
+        """Verify adapter correctly converts auto-generated ListResponse to List ABC."""
+        resp = MagicMock(spec=ListResponse)
+        resp.id = "l1"
+        resp.name = "To Do"
+        resp.board_id = "b1"
+        mock_api.sync.return_value = [resp]
+
+        client = adapter_get_client_impl(
+            base_url="https://example.com",
+            session_token="tok",
+        )
+        lists = list(client.get_lists("b1"))
+        assert len(lists) == 1
+        assert isinstance(lists[0], List)
+        assert lists[0].name == "To Do"
+
+    @patch("issue_tracker_adapter.client.update_list_api")
+    def test_adapter_update_list_with_service_client(self, mock_api: MagicMock) -> None:
+        """Verify adapter correctly converts auto-generated ListResponse after update."""
+        resp = MagicMock(spec=ListResponse)
+        resp.id = "l1"
+        resp.name = "Renamed"
+        resp.board_id = "b1"
+        mock_api.sync.return_value = resp
+
+        client = adapter_get_client_impl(
+            base_url="https://example.com",
+            session_token="tok",
+        )
+        lst = client.update_list("l1", "Renamed")
+        assert isinstance(lst, List)
+        assert lst.name == "Renamed"
+
+    @patch("issue_tracker_adapter.client.delete_list_api")
+    def test_adapter_delete_list_with_service_client(self, mock_api: MagicMock) -> None:
+        """Verify adapter delete_list returns bool."""
+        result = MagicMock()
+        result.additional_properties = {"success": True}
+        mock_api.sync.return_value = result
+
+        client = adapter_get_client_impl(
+            base_url="https://example.com",
+            session_token="tok",
+        )
+        assert client.delete_list("l1") is True
+
+    @patch("issue_tracker_adapter.client.add_member_api")
+    def test_adapter_add_member_to_board_with_service_client(
+        self, mock_api: MagicMock
+    ) -> None:
+        """Verify adapter add_member_to_board returns bool."""
+        result = MagicMock()
+        result.additional_properties = {"success": True}
+        mock_api.sync.return_value = result
+
+        client = adapter_get_client_impl(
+            base_url="https://example.com",
+            session_token="tok",
+        )
+        assert client.add_member_to_board("b1", "m1") is True

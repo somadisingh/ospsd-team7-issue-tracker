@@ -17,6 +17,9 @@ if TYPE_CHECKING:
 import issue_tracker_client_api
 from issue_tracker_client_api import Board, Client, Issue, List, Member
 from issue_tracker_service_client.api.default import (
+    add_member_to_board_boards_board_id_members_post as add_member_api,
+)
+from issue_tracker_service_client.api.default import (
     assign_issue_issues_issue_id_assign_post as assign_api,
 )
 from issue_tracker_service_client.api.default import (
@@ -30,6 +33,9 @@ from issue_tracker_service_client.api.default import (
 )
 from issue_tracker_service_client.api.default import (
     delete_issue_issues_issue_id_delete as delete_issue_api,
+)
+from issue_tracker_service_client.api.default import (
+    delete_list_lists_list_id_delete as delete_list_api,
 )
 from issue_tracker_service_client.api.default import (
     get_board_boards_board_id_get as get_board_api,
@@ -47,12 +53,21 @@ from issue_tracker_service_client.api.default import (
     get_list_lists_list_id_get as get_list_api,
 )
 from issue_tracker_service_client.api.default import (
+    get_lists_boards_board_id_lists_get as get_lists_api,
+)
+from issue_tracker_service_client.api.default import (
     list_boards_boards_get as list_boards_api,
 )
 from issue_tracker_service_client.api.default import (
     update_issue_status_issues_issue_id_status_put as update_status_api,
 )
+from issue_tracker_service_client.api.default import (
+    update_list_lists_list_id_put as update_list_api,
+)
 from issue_tracker_service_client.client import Client as HttpClient
+from issue_tracker_service_client.models.add_member_to_board_request import (
+    AddMemberToBoardRequest,
+)
 from issue_tracker_service_client.models.board_response import BoardResponse
 from issue_tracker_service_client.models.create_board_request import (
     CreateBoardRequest,
@@ -64,6 +79,9 @@ from issue_tracker_service_client.models.create_list_request import CreateListRe
 from issue_tracker_service_client.models.issue_response import IssueResponse
 from issue_tracker_service_client.models.list_response import ListResponse
 from issue_tracker_service_client.models.member_response import MemberResponse
+from issue_tracker_service_client.models.update_list_request import (
+    UpdateListRequest,
+)
 from issue_tracker_service_client.models.update_status_request import (
     UpdateStatusRequest,
 )
@@ -144,9 +162,15 @@ class ServiceClientAdapter(Client):
         return ServiceBoard.from_response(self._ensure_board(result))
 
     def add_member_to_board(self, board_id: str, member_id: str) -> bool:
-        raise NotImplementedError(
-            "add_member_to_board is not exposed by the service API"
+        result = add_member_api.sync(
+            board_id=board_id,
+            client=self._http_client,
+            body=AddMemberToBoardRequest(member_id=member_id),
+            x_session_token=self._session_token,
         )
+        if result is None:
+            return False
+        return bool(getattr(result, "additional_properties", {}).get("success", True))
 
     # ------------------------------------------------------------------
     # List operations
@@ -161,7 +185,16 @@ class ServiceClientAdapter(Client):
         return ServiceList.from_response(self._ensure_list(result))
 
     def get_lists(self, board_id: str) -> Iterator[List]:
-        raise NotImplementedError("get_lists is not exposed by the service API")
+        result = get_lists_api.sync(
+            board_id=board_id,
+            client=self._http_client,
+            x_session_token=self._session_token,
+        )
+        if not isinstance(result, list):
+            return
+        for list_resp in result:
+            if isinstance(list_resp, ListResponse):
+                yield ServiceList.from_response(list_resp)
 
     def create_list(self, board_id: str, name: str) -> List:
         result = create_list_api.sync(
@@ -172,10 +205,23 @@ class ServiceClientAdapter(Client):
         return ServiceList.from_response(self._ensure_list(result))
 
     def update_list(self, list_id: str, name: str) -> List:
-        raise NotImplementedError("update_list is not exposed by the service API")
+        result = update_list_api.sync(
+            list_id=list_id,
+            client=self._http_client,
+            body=UpdateListRequest(name=name),
+            x_session_token=self._session_token,
+        )
+        return ServiceList.from_response(self._ensure_list(result))
 
     def delete_list(self, list_id: str) -> bool:
-        raise NotImplementedError("delete_list is not exposed by the service API")
+        result = delete_list_api.sync(
+            list_id=list_id,
+            client=self._http_client,
+            x_session_token=self._session_token,
+        )
+        if result is None:
+            return False
+        return bool(getattr(result, "additional_properties", {}).get("success", True))
 
     # ------------------------------------------------------------------
     # Issue operations

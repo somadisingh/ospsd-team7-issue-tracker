@@ -145,9 +145,24 @@ class TestServiceClientAdapter:
         with pytest.raises(TypeError, match="Expected BoardResponse"):
             adapter.create_board("Test")
 
-    def test_add_member_to_board_raises(self, adapter: ServiceClientAdapter) -> None:
-        with pytest.raises(NotImplementedError, match="not exposed"):
-            adapter.add_member_to_board("b1", "m1")
+    @patch("issue_tracker_adapter.client.add_member_api")
+    def test_add_member_to_board(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        result = MagicMock()
+        result.additional_properties = {"success": True}
+        mock_api.sync.return_value = result
+
+        assert adapter.add_member_to_board("b1", "m1") is True
+        mock_api.sync.assert_called_once()
+
+    @patch("issue_tracker_adapter.client.add_member_api")
+    def test_add_member_to_board_none_response(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.return_value = None
+
+        assert adapter.add_member_to_board("b1", "m1") is False
 
     # ------------------------------------------------------------------
     # List operations
@@ -178,9 +193,56 @@ class TestServiceClientAdapter:
         with pytest.raises(TypeError, match="Expected ListResponse"):
             adapter.get_list("list_1")
 
-    def test_get_lists_raises(self, adapter: ServiceClientAdapter) -> None:
-        with pytest.raises(NotImplementedError, match="not exposed"):
-            list(adapter.get_lists("board_1"))
+    @patch("issue_tracker_adapter.client.get_lists_api")
+    def test_get_lists(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        resp = MagicMock(spec=ListResponse)
+        resp.id = "l1"
+        resp.name = "To Do"
+        resp.board_id = "board_1"
+        mock_api.sync.return_value = [resp]
+
+        lists = list(adapter.get_lists("board_1"))
+
+        assert len(lists) == 1
+        assert isinstance(lists[0], ServiceList)
+        assert lists[0].id == "l1"
+        mock_api.sync.assert_called_once()
+
+    @patch("issue_tracker_adapter.client.get_lists_api")
+    def test_get_lists_empty(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.return_value = []
+
+        lists = list(adapter.get_lists("board_1"))
+
+        assert lists == []
+
+    @patch("issue_tracker_adapter.client.get_lists_api")
+    def test_get_lists_non_list_response(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.return_value = None
+
+        lists = list(adapter.get_lists("board_1"))
+
+        assert lists == []
+
+    @patch("issue_tracker_adapter.client.get_lists_api")
+    def test_get_lists_filters_non_list_responses(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        valid = MagicMock(spec=ListResponse)
+        valid.id = "l1"
+        valid.name = "To Do"
+        valid.board_id = "b1"
+        mock_api.sync.return_value = [valid, "not_a_list"]
+
+        lists = list(adapter.get_lists("board_1"))
+
+        assert len(lists) == 1
 
     @patch("issue_tracker_adapter.client.create_list_api")
     def test_create_list(
@@ -198,13 +260,49 @@ class TestServiceClientAdapter:
         assert lst.name == "Done"
         mock_api.sync.assert_called_once()
 
-    def test_update_list_raises(self, adapter: ServiceClientAdapter) -> None:
-        with pytest.raises(NotImplementedError, match="not exposed"):
+    @patch("issue_tracker_adapter.client.update_list_api")
+    def test_update_list(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        resp = MagicMock(spec=ListResponse)
+        resp.id = "list_1"
+        resp.name = "Renamed"
+        resp.board_id = "board_1"
+        mock_api.sync.return_value = resp
+
+        lst = adapter.update_list("list_1", "Renamed")
+
+        assert isinstance(lst, ServiceList)
+        assert lst.name == "Renamed"
+        mock_api.sync.assert_called_once()
+
+    @patch("issue_tracker_adapter.client.update_list_api")
+    def test_update_list_invalid_response_raises(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.return_value = None
+
+        with pytest.raises(TypeError, match="Expected ListResponse"):
             adapter.update_list("list_1", "Renamed")
 
-    def test_delete_list_raises(self, adapter: ServiceClientAdapter) -> None:
-        with pytest.raises(NotImplementedError, match="not exposed"):
-            adapter.delete_list("list_1")
+    @patch("issue_tracker_adapter.client.delete_list_api")
+    def test_delete_list(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        result = MagicMock()
+        result.additional_properties = {"success": True}
+        mock_api.sync.return_value = result
+
+        assert adapter.delete_list("list_1") is True
+        mock_api.sync.assert_called_once()
+
+    @patch("issue_tracker_adapter.client.delete_list_api")
+    def test_delete_list_none_response(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.return_value = None
+
+        assert adapter.delete_list("list_1") is False
 
     # ------------------------------------------------------------------
     # Issue operations

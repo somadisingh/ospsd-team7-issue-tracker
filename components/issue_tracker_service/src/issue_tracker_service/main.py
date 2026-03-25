@@ -81,6 +81,14 @@ class CreateListRequest(BaseModel):
     name: str
 
 
+class UpdateListRequest(BaseModel):
+    name: str
+
+
+class AddMemberToBoardRequest(BaseModel):
+    member_id: str
+
+
 class CreateIssueRequest(BaseModel):
     title: str
     list_id: str
@@ -124,6 +132,21 @@ async def create_board(
     return _board_to_response(board)
 
 
+@app.post("/boards/{board_id}/members", response_model=Dict[str, bool])
+async def add_member_to_board(
+    board_id: str,
+    body: AddMemberToBoardRequest,
+    client: TrelloClient = Depends(get_authenticated_client),
+) -> Dict[str, bool]:
+    success = client.add_member_to_board(board_id=board_id, member_id=body.member_id)
+    return {"success": success}
+
+
+@app.get("/boards/{board_id}/lists", response_model=List[ListResponse])
+async def get_lists(board_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> list[ListResponse]:
+    return [_list_to_response(lst) for lst in client.get_lists(board_id)]
+
+
 @app.get("/lists/{list_id}", response_model=ListResponse)
 async def get_list(list_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> ListResponse:
     lst = client.get_list(list_id)
@@ -134,6 +157,22 @@ async def get_list(list_id: str, client: TrelloClient = Depends(get_authenticate
 async def create_list(req: CreateListRequest, client: TrelloClient = Depends(get_authenticated_client)) -> ListResponse:
     lst = client.create_list(board_id=req.board_id, name=req.name)
     return _list_to_response(lst)
+
+
+@app.put("/lists/{list_id}", response_model=ListResponse)
+async def update_list(
+    list_id: str,
+    body: UpdateListRequest,
+    client: TrelloClient = Depends(get_authenticated_client),
+) -> ListResponse:
+    lst = client.update_list(list_id=list_id, name=body.name)
+    return _list_to_response(lst)
+
+
+@app.delete("/lists/{list_id}", response_model=Dict[str, bool])
+async def delete_list(list_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> Dict[str, bool]:
+    result = client.delete_list(list_id)
+    return {"success": result}
 
 
 @app.get("/lists/{list_id}/issues", response_model=List[IssueResponse])

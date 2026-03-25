@@ -84,6 +84,74 @@ class TestBoardEndpoints:
         assert response.json()["name"] == "Test Board"
         mock_trello_client.create_board.assert_called_once_with(name="New Board")
 
+    def test_add_member_to_board(
+        self,
+        test_client: TestClient,
+        mock_trello_client: MagicMock,
+    ) -> None:
+        mock_trello_client.add_member_to_board.return_value = True
+
+        response = test_client.post(
+            "/boards/board_123/members",
+            json={"member_id": "member_abc"},
+            headers={"X-Session-Token": "tok"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"success": True}
+        mock_trello_client.add_member_to_board.assert_called_once_with(board_id="board_123", member_id="member_abc")
+
+    def test_add_member_to_board_failure(
+        self,
+        test_client: TestClient,
+        mock_trello_client: MagicMock,
+    ) -> None:
+        mock_trello_client.add_member_to_board.return_value = False
+
+        response = test_client.post(
+            "/boards/board_123/members",
+            json={"member_id": "member_abc"},
+            headers={"X-Session-Token": "tok"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"success": False}
+
+    def test_get_lists(
+        self,
+        test_client: TestClient,
+        mock_trello_client: MagicMock,
+        mock_list_obj: MagicMock,
+    ) -> None:
+        mock_trello_client.get_lists.return_value = [mock_list_obj]
+
+        response = test_client.get(
+            "/boards/board_123/lists",
+            headers={"X-Session-Token": "tok"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == "list_456"
+        assert data[0]["name"] == "To Do"
+        assert data[0]["board_id"] == "board_123"
+
+    def test_get_lists_empty(
+        self,
+        test_client: TestClient,
+        mock_trello_client: MagicMock,
+    ) -> None:
+        mock_trello_client.get_lists.return_value = []
+
+        response = test_client.get(
+            "/boards/board_123/lists",
+            headers={"X-Session-Token": "tok"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == []
+
 
 @pytest.mark.unit
 class TestListEndpoints:
@@ -121,6 +189,55 @@ class TestListEndpoints:
 
         assert response.status_code == 200
         assert response.json()["id"] == "list_456"
+
+    def test_update_list(
+        self,
+        test_client: TestClient,
+        mock_trello_client: MagicMock,
+        mock_list_obj: MagicMock,
+    ) -> None:
+        mock_trello_client.update_list.return_value = mock_list_obj
+
+        response = test_client.put(
+            "/lists/list_456",
+            json={"name": "Renamed"},
+            headers={"X-Session-Token": "tok"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == "list_456"
+        mock_trello_client.update_list.assert_called_once_with(list_id="list_456", name="Renamed")
+
+    def test_delete_list(
+        self,
+        test_client: TestClient,
+        mock_trello_client: MagicMock,
+    ) -> None:
+        mock_trello_client.delete_list.return_value = True
+
+        response = test_client.delete(
+            "/lists/list_456",
+            headers={"X-Session-Token": "tok"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"success": True}
+
+    def test_delete_list_failure(
+        self,
+        test_client: TestClient,
+        mock_trello_client: MagicMock,
+    ) -> None:
+        mock_trello_client.delete_list.return_value = False
+
+        response = test_client.delete(
+            "/lists/list_456",
+            headers={"X-Session-Token": "tok"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"success": False}
 
     def test_get_issues_in_list(
         self,
