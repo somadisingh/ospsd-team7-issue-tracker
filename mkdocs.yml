@@ -1,0 +1,44 @@
+site_name: Issue Tracker Client Project
+site_description: "OSPSD Team 07 - Issue Tracker Client documentation."
+
+theme:
+  name: material
+  palette:
+    # Light mode
+    - scheme: default
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    # Dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - content.code.copy
+
+nav:
+  - "Overview": "index.md"
+  - "Architecture": "architecture.md"
+  - "API Reference":
+    - "Issue Tracker Client API": "api/issue_tracker_client_api.md"
+    - "Trello Client Implementation": "api/trello_client_impl.md"
+  - "Code Quality": "code-quality.md"
+  - "CI/CD": "ci-cd.md"
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+
+plugins:
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: false
+            docstring_section_style: spacy
+            members_order: source

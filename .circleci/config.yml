@@ -1,0 +1,108 @@
+version: 2.1
+
+jobs:
+  lint:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+
+      - restore_cache:
+          keys:
+            - v1-deps-{{ checksum "uv.lock" }}
+            - v1-deps-
+
+      - run:
+          name: Install uv
+          command: |
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> $BASH_ENV
+            source $BASH_ENV
+
+      - run:
+          name: Install dependencies
+          command: |
+            uv sync --all-extras
+
+      - save_cache:
+          paths:
+            - .venv
+          key: v1-deps-{{ checksum "uv.lock" }}
+
+      - run:
+          name: Ruff (linting)
+          command: uv run ruff check .
+
+      - run:
+          name: Ruff (format check)
+          command: uv run ruff format --check .
+
+      - run:
+          name: Mypy (static type checking)
+          command: uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src
+
+  test:
+    docker:
+      - image: cimg/python:3.12
+    # Project-level env vars (TRELLO_API_KEY, TRELLO_TOKEN, TRELLO_BOARD_ID)
+    # are automatically available when set in CircleCI Project Settings
+    steps:
+      - checkout
+
+      - restore_cache:
+          keys:
+            - v1-deps-{{ checksum "uv.lock" }}
+            - v1-deps-
+
+      - run:
+          name: Install uv
+          command: |
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> $BASH_ENV
+            source $BASH_ENV
+
+      - run:
+          name: Install dependencies
+          command: |
+            uv sync --all-extras
+
+      - save_cache:
+          paths:
+            - .venv
+          key: v1-deps-{{ checksum "uv.lock" }}
+
+      - run:
+          name: Run tests (unit, integration, e2e)
+          command: |
+            mkdir -p test-results
+            uv run pytest \
+              -m "unit or integration or e2e" \
+              --junitxml=test-results/junit.xml \
+              --cov=components \
+              --cov-report=term-missing \
+              --cov-report=html:htmlcov \
+              --cov-report=xml:coverage.xml \
+              -v
+
+      - run:
+          name: Upload coverage to Codecov
+          command: |
+            curl -sSfL https://codecov.io/bash -o codecov.sh
+            bash codecov.sh -f coverage.xml -n circleci || echo "Codecov upload skipped (add repo at codecov.io to enable)"
+          when: always
+
+      - store_test_results:
+          path: test-results
+          when: always
+
+      - store_artifacts:
+          path: htmlcov
+          destination: coverage-report
+          when: always
+
+workflows:
+  version: 2
+  ci:
+    jobs:
+      - lint
+      - test

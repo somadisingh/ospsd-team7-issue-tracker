@@ -1,0 +1,141 @@
+[project]
+name = "ospsd-team-07"
+version = "0.1.0"
+description = "OSPSD Team 07 - Issue Tracker Client"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.6.0",
+    "mkdocstrings-python>=1.16.0",
+    "mypy>=1.15.0",
+    "pymdown-extensions>=10.14.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "ruff>=0.9.0",
+    "types-requests>=2.31.0",
+]
+
+[tool.uv.workspace]
+members = ["components/*"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D203",   # Incompatible with D211
+  "D213",   # Incompatible with D212
+  "COM812", # Conflicts with ruff formatter
+  "EM101",  # NotImplementedError with inline strings is idiomatic Python
+  "EM102",  # Same as EM101 for assert statements
+  "E501",   # Line too long — docstrings and type hints can exceed line length
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test files: pytest-specific patterns that are expected in tests
+"**/tests/**/*.py" = [
+  "S101",    # Use of assert — standard in pytest
+  "S105",    # Hardcoded password — test fixtures use fake credentials
+  "S106",    # Hardcoded password in function arg — same as above
+  "S110",    # try/except/pass — expected pattern in exception tests
+  "PLR2004", # Magic numbers — expected in test assertions
+  "D100",    # Missing module docstring — test modules are self-documenting
+  "D102",    # Missing docstring in method — test names are descriptive
+  "D103",    # Missing function docstring — pytest function names describe intent
+  "D107",    # Missing __init__ docstring — test classes are fixtures
+  "D401",    # Imperative mood — not applicable to test methods
+  "ANN001",  # Missing type annotation — pytest fixtures
+  "ANN201",  # Missing return type — pytest functions
+  "ANN202",  # Missing return type — pytest private methods
+  "ANN401",  # Dynamically typed Any — needed for mocking
+  "A002",    # Shadowing builtin (id) — required for API mapping in tests
+  "ARG001",  # Unused argument — pytest fixtures may not be directly used
+  "ARG002",  # Unused argument — same as above
+  "FBT001",  # Boolean positional arg — common in test fixtures
+  "BLE001",  # Blind exception catch — intentional in error handling tests
+  "SLF001",  # Private member access — tests verify internal state
+  "F841",    # Unused variable — intentional in try/except tests
+  "INP001",  # Missing __init__.py — test dirs must not have it
+]
+# Trello implementation: similar to tests, but stricter for production code
+"components/trello_client_impl/src/**/*.py" = [
+  "D102",    # Missing method docstring — implementation follows interface
+  "D107",    # Missing __init__ docstring — dataclass/TypedDict
+  "A002",    # id shadows builtin — required for Trello API mapping
+  "TRY003",  # Long exception messages — user-facing error context
+  "BLE001",  # Blind exception catching — network error handling
+  "PLR0913", # Too many arguments — Trello Card has many fields
+]
+# Conftest: pytest configuration
+"conftest.py" = [
+  "ANN001",  # config arg — pytest hook parameter
+  "ANN201",  # return type — pytest hook return
+  "D103",    # Missing function docstring — fixture names are descriptive
+]
+
+[tool.mypy]
+strict = true
+explicit_package_bases = true  # Required for src layout
+mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src"]
+ignore_missing_imports = false
+warn_unused_ignores = false
+show_error_codes = true
+
+[tool.pytest.ini_options]
+pythonpath = [
+    ".",
+    "components/issue_tracker_client_api/src",
+    "components/trello_client_impl/src",
+]
+testpaths = ["tests", "components/*/tests"]
+python_files = ["*_test.py", "test_*.py", "*_tests.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: marks tests as unit tests (no external dependencies req as of now)",
+    "integration: marks tests as integration tests (requires dependencies)",
+    "e2e: marks tests as end-to-end tests (full system, auto-skipped without credentials)",
+]
+addopts = [
+    "--cov=components",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--import-mode=importlib",
+    "-v",
+]
+doctest_optionflags = "NORMALIZE_WHITESPACE ELLIPSIS"
+
+[tool.coverage.run]
+branch = true
+source = ["components"]
+omit = [
+    "*/tests/*",
+    "*/__main__.py",
+    "*/site-packages/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+fail_under = 85
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.*",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
