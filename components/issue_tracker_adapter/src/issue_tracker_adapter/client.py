@@ -170,7 +170,7 @@ class ServiceClientAdapter(Client):
         )
         if result is None:
             return False
-        return bool(getattr(result, "additional_properties", {}).get("success", True))
+        return bool(getattr(result, "additional_properties", {}).get("success", False))
 
     # ------------------------------------------------------------------
     # List operations
@@ -221,7 +221,7 @@ class ServiceClientAdapter(Client):
         )
         if result is None:
             return False
-        return bool(getattr(result, "additional_properties", {}).get("success", True))
+        return bool(getattr(result, "additional_properties", {}).get("success", False))
 
     # ------------------------------------------------------------------
     # Issue operations
@@ -279,7 +279,7 @@ class ServiceClientAdapter(Client):
         )
         if result is None:
             return False
-        return bool(getattr(result, "additional_properties", {}).get("success", True))
+        return bool(getattr(result, "additional_properties", {}).get("success", False))
 
     def delete_issue(self, issue_id: str) -> bool:
         result = delete_issue_api.sync(
@@ -289,7 +289,7 @@ class ServiceClientAdapter(Client):
         )
         if result is None:
             return False
-        return bool(getattr(result, "additional_properties", {}).get("success", True))
+        return bool(getattr(result, "additional_properties", {}).get("success", False))
 
     # ------------------------------------------------------------------
     # Member operations
@@ -318,7 +318,7 @@ class ServiceClientAdapter(Client):
         )
         if result is None:
             return False
-        return bool(getattr(result, "additional_properties", {}).get("success", True))
+        return bool(getattr(result, "additional_properties", {}).get("success", False))
 
     # ------------------------------------------------------------------
     # OAuth — handled by the service, not the adapter
