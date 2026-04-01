@@ -11,8 +11,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import httpx
+from issue_tracker_service_client import errors as api_errors
+from issue_tracker_service_client.models.http_validation_error import (
+    HTTPValidationError,
+)
+
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 import issue_tracker_client_api
 from issue_tracker_client_api import Board, Client, Issue, List, Member
@@ -130,23 +136,53 @@ class ServiceClientAdapter(Client):
             raise TypeError(msg)
         return result
 
+    def _check_validation_error(self, result: object) -> None:
+        """Raise ``ValueError`` when the service returns a 422 validation error."""
+        if isinstance(result, HTTPValidationError):
+            detail = getattr(result, "detail", None)
+            if isinstance(detail, list):
+                msgs = "; ".join(str(e.to_dict()) for e in detail)
+            else:
+                msgs = "unknown validation error"
+            raise ValueError(f"Validation error from service: {msgs}")  # noqa: TRY004
+
+    def _call_api(self, api_func: Callable[..., Any], **kwargs: Any) -> Any:  # noqa: ANN401
+        """Call a generated API function, translating HTTP errors.
+
+        Catches transport-level errors (timeouts, connection failures) and
+        unexpected HTTP status codes from the generated client and re-raises
+        them as standard Python exceptions.  Also detects 422 validation
+        error responses and raises ``ValueError``.
+        """
+        try:
+            result = api_func(
+                client=self._http_client,
+                x_session_token=self._session_token,
+                **kwargs,
+            )
+        except httpx.TimeoutException as exc:
+            raise TimeoutError(f"Request to service timed out: {exc}") from exc
+        except httpx.ConnectError as exc:
+            raise ConnectionError(f"Could not connect to service: {exc}") from exc
+        except httpx.HTTPError as exc:
+            raise ConnectionError(f"HTTP transport error: {exc}") from exc
+        except api_errors.UnexpectedStatus as exc:
+            raise RuntimeError(
+                f"Service returned unexpected status {exc.status_code}"
+            ) from exc
+        self._check_validation_error(result)
+        return result
+
     # ------------------------------------------------------------------
     # Board operations
     # ------------------------------------------------------------------
 
     def get_board(self, board_id: str) -> Board:
-        result = get_board_api.sync(
-            board_id=board_id,
-            client=self._http_client,
-            x_session_token=self._session_token,
-        )
+        result = self._call_api(get_board_api.sync, board_id=board_id)
         return ServiceBoard.from_response(self._ensure_board(result))
 
     def get_boards(self) -> Iterator[Board]:
-        result = list_boards_api.sync(
-            client=self._http_client,
-            x_session_token=self._session_token,
-        )
+        result = self._call_api(list_boards_api.sync)
         if not isinstance(result, list):
             return
         for board_resp in result:
@@ -154,19 +190,17 @@ class ServiceClientAdapter(Client):
                 yield ServiceBoard.from_response(board_resp)
 
     def create_board(self, name: str) -> Board:
-        result = create_board_api.sync(
-            client=self._http_client,
+        result = self._call_api(
+            create_board_api.sync,
             body=CreateBoardRequest(name=name),
-            x_session_token=self._session_token,
         )
         return ServiceBoard.from_response(self._ensure_board(result))
 
     def add_member_to_board(self, board_id: str, member_id: str) -> bool:
-        result = add_member_api.sync(
+        result = self._call_api(
+            add_member_api.sync,
             board_id=board_id,
-            client=self._http_client,
             body=AddMemberToBoardRequest(member_id=member_id),
-            x_session_token=self._session_token,
         )
         if result is None:
             return False
@@ -177,19 +211,11 @@ class ServiceClientAdapter(Client):
     # ------------------------------------------------------------------
 
     def get_list(self, list_id: str) -> List:
-        result = get_list_api.sync(
-            list_id=list_id,
-            client=self._http_client,
-            x_session_token=self._session_token,
-        )
+        result = self._call_api(get_list_api.sync, list_id=list_id)
         return ServiceList.from_response(self._ensure_list(result))
 
     def get_lists(self, board_id: str) -> Iterator[List]:
-        result = get_lists_api.sync(
-            board_id=board_id,
-            client=self._http_client,
-            x_session_token=self._session_token,
-        )
+        result = self._call_api(get_lists_api.sync, board_id=board_id)
         if not isinstance(result, list):
             return
         for list_resp in result:
@@ -197,28 +223,22 @@ class ServiceClientAdapter(Client):
                 yield ServiceList.from_response(list_resp)
 
     def create_list(self, board_id: str, name: str) -> List:
-        result = create_list_api.sync(
-            client=self._http_client,
+        result = self._call_api(
+            create_list_api.sync,
             body=CreateListRequest(board_id=board_id, name=name),
-            x_session_token=self._session_token,
         )
         return ServiceList.from_response(self._ensure_list(result))
 
     def update_list(self, list_id: str, name: str) -> List:
-        result = update_list_api.sync(
+        result = self._call_api(
+            update_list_api.sync,
             list_id=list_id,
-            client=self._http_client,
             body=UpdateListRequest(name=name),
-            x_session_token=self._session_token,
         )
         return ServiceList.from_response(self._ensure_list(result))
 
     def delete_list(self, list_id: str) -> bool:
-        result = delete_list_api.sync(
-            list_id=list_id,
-            client=self._http_client,
-            x_session_token=self._session_token,
-        )
+        result = self._call_api(delete_list_api.sync, list_id=list_id)
         if result is None:
             return False
         return bool(getattr(result, "additional_properties", {}).get("success", False))
@@ -228,11 +248,7 @@ class ServiceClientAdapter(Client):
     # ------------------------------------------------------------------
 
     def get_issue(self, issue_id: str) -> Issue:
-        result = get_issue_api.sync(
-            issue_id=issue_id,
-            client=self._http_client,
-            x_session_token=self._session_token,
-        )
+        result = self._call_api(get_issue_api.sync, issue_id=issue_id)
         return ServiceIssue.from_response(self._ensure_issue(result))
 
     def get_issues_in_list(
@@ -240,11 +256,10 @@ class ServiceClientAdapter(Client):
         list_id: str,
         max_issues: int = 100,
     ) -> Iterator[Issue]:
-        result = get_issues_api.sync(
+        result = self._call_api(
+            get_issues_api.sync,
             list_id=list_id,
-            client=self._http_client,
             max_issues=max_issues,
-            x_session_token=self._session_token,
         )
         if not isinstance(result, list):
             return
@@ -259,34 +274,28 @@ class ServiceClientAdapter(Client):
         *,
         description: str | None = None,
     ) -> Issue:
-        result = create_issue_api.sync(
-            client=self._http_client,
+        result = self._call_api(
+            create_issue_api.sync,
             body=CreateIssueRequest(
                 title=title,
                 list_id=list_id,
                 description=description,
             ),
-            x_session_token=self._session_token,
         )
         return ServiceIssue.from_response(self._ensure_issue(result))
 
     def update_status(self, issue_id: str, status: str) -> bool:
-        result = update_status_api.sync(
+        result = self._call_api(
+            update_status_api.sync,
             issue_id=issue_id,
-            client=self._http_client,
             body=UpdateStatusRequest(status=status),
-            x_session_token=self._session_token,
         )
         if result is None:
             return False
         return bool(getattr(result, "additional_properties", {}).get("success", False))
 
     def delete_issue(self, issue_id: str) -> bool:
-        result = delete_issue_api.sync(
-            issue_id=issue_id,
-            client=self._http_client,
-            x_session_token=self._session_token,
-        )
+        result = self._call_api(delete_issue_api.sync, issue_id=issue_id)
         if result is None:
             return False
         return bool(getattr(result, "additional_properties", {}).get("success", False))
@@ -296,11 +305,7 @@ class ServiceClientAdapter(Client):
     # ------------------------------------------------------------------
 
     def get_members_on_issue(self, issue_id: str) -> list[Member]:
-        result = get_members_api.sync(
-            issue_id=issue_id,
-            client=self._http_client,
-            x_session_token=self._session_token,
-        )
+        result = self._call_api(get_members_api.sync, issue_id=issue_id)
         if not isinstance(result, list):
             return []
         return [
@@ -310,11 +315,10 @@ class ServiceClientAdapter(Client):
         ]
 
     def assign_issue(self, issue_id: str, member_id: str) -> bool:
-        result = assign_api.sync(
+        result = self._call_api(
+            assign_api.sync,
             issue_id=issue_id,
-            client=self._http_client,
             member_id=member_id,
-            x_session_token=self._session_token,
         )
         if result is None:
             return False

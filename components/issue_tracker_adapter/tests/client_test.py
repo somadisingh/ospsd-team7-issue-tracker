@@ -3,6 +3,7 @@
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 from issue_tracker_adapter.board import ServiceBoard
 from issue_tracker_adapter.client import ServiceClientAdapter, get_client_impl, register
@@ -10,7 +11,11 @@ from issue_tracker_adapter.issue import ServiceIssue
 from issue_tracker_adapter.list import ServiceList
 from issue_tracker_adapter.member import ServiceMember
 from issue_tracker_client_api import Client
+from issue_tracker_service_client import errors as api_errors
 from issue_tracker_service_client.models.board_response import BoardResponse
+from issue_tracker_service_client.models.http_validation_error import (
+    HTTPValidationError,
+)
 from issue_tracker_service_client.models.issue_response import IssueResponse
 from issue_tracker_service_client.models.list_response import ListResponse
 from issue_tracker_service_client.models.member_response import MemberResponse
@@ -548,6 +553,139 @@ class TestServiceClientAdapter:
     def test_exchange_request_token_raises(self, adapter: ServiceClientAdapter) -> None:
         with pytest.raises(NotImplementedError, match="OAuth"):
             adapter.exchange_request_token("token", "verifier")
+
+
+@pytest.mark.unit
+class TestHTTPErrorHandling:
+    """Test that HTTP/transport errors are caught and translated by _call_api."""
+
+    @pytest.fixture
+    def adapter(self, adapter_kwargs: dict[str, Any]) -> ServiceClientAdapter:
+        return ServiceClientAdapter(**adapter_kwargs)
+
+    # -- timeout ----------------------------------------------------------
+
+    @patch("issue_tracker_adapter.client.get_board_api")
+    def test_timeout_raises_timeout_error(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.side_effect = httpx.ReadTimeout("read timed out")
+
+        with pytest.raises(TimeoutError, match="timed out"):
+            adapter.get_board("board_1")
+
+    @patch("issue_tracker_adapter.client.list_boards_api")
+    def test_timeout_on_collection_raises_timeout_error(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.side_effect = httpx.ReadTimeout("read timed out")
+
+        with pytest.raises(TimeoutError, match="timed out"):
+            list(adapter.get_boards())
+
+    # -- connection error -------------------------------------------------
+
+    @patch("issue_tracker_adapter.client.get_board_api")
+    def test_connect_error_raises_connection_error(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.side_effect = httpx.ConnectError("connection refused")
+
+        with pytest.raises(ConnectionError, match="Could not connect"):
+            adapter.get_board("board_1")
+
+    @patch("issue_tracker_adapter.client.create_issue_api")
+    def test_generic_http_error_raises_connection_error(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.side_effect = httpx.HTTPError("something broke")
+
+        with pytest.raises(ConnectionError, match="HTTP transport error"):
+            adapter.create_issue("Title", "list_1")
+
+    # -- unexpected status ------------------------------------------------
+
+    @patch("issue_tracker_adapter.client.get_issue_api")
+    def test_unexpected_status_raises_runtime_error(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.side_effect = api_errors.UnexpectedStatus(
+            status_code=503, content=b"Service Unavailable"
+        )
+
+        with pytest.raises(RuntimeError, match="unexpected status 503"):
+            adapter.get_issue("issue_1")
+
+    @patch("issue_tracker_adapter.client.delete_list_api")
+    def test_unexpected_status_on_bool_endpoint(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.side_effect = api_errors.UnexpectedStatus(
+            status_code=500, content=b"Internal Server Error"
+        )
+
+        with pytest.raises(RuntimeError, match="unexpected status 500"):
+            adapter.delete_list("list_1")
+
+    # -- validation error (422) -------------------------------------------
+
+    @patch("issue_tracker_adapter.client.create_board_api")
+    def test_validation_error_raises_value_error(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        validation_err = MagicMock(spec=HTTPValidationError)
+        detail_item = MagicMock()
+        detail_item.to_dict.return_value = {
+            "loc": ["body", "name"],
+            "msg": "field required",
+        }
+        validation_err.detail = [detail_item]
+        mock_api.sync.return_value = validation_err
+
+        with pytest.raises(ValueError, match="Validation error from service"):
+            adapter.create_board("Test")
+
+    @patch("issue_tracker_adapter.client.add_member_api")
+    def test_validation_error_on_bool_endpoint_raises_value_error(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        validation_err = MagicMock(spec=HTTPValidationError)
+        validation_err.detail = None
+        mock_api.sync.return_value = validation_err
+
+        with pytest.raises(ValueError, match="Validation error from service"):
+            adapter.add_member_to_board("board_1", "member_1")
+
+    @patch("issue_tracker_adapter.client.get_lists_api")
+    def test_validation_error_on_collection_endpoint_raises_value_error(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        validation_err = MagicMock(spec=HTTPValidationError)
+        validation_err.detail = None
+        mock_api.sync.return_value = validation_err
+
+        with pytest.raises(ValueError, match="Validation error from service"):
+            list(adapter.get_lists("board_1"))
+
+    # -- error on various method categories --------------------------------
+
+    @patch("issue_tracker_adapter.client.assign_api")
+    def test_timeout_on_assign(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.side_effect = httpx.ReadTimeout("timed out")
+
+        with pytest.raises(TimeoutError):
+            adapter.assign_issue("issue_1", "member_1")
+
+    @patch("issue_tracker_adapter.client.get_members_api")
+    def test_connect_error_on_get_members(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.side_effect = httpx.ConnectError("refused")
+
+        with pytest.raises(ConnectionError):
+            adapter.get_members_on_issue("issue_1")
 
 
 @pytest.mark.unit

@@ -100,11 +100,11 @@ class UpdateStatusRequest(BaseModel):
 
 
 def get_authenticated_client(x_session_token: str = Header(..., alias="X-Session-Token")) -> TrelloClient:
-    config = _trello_config()
     session = user_sessions.get(x_session_token)
     if not session:
         raise HTTPException(status_code=401, detail="Invalid or missing session token")
 
+    config = _trello_config()
     return TrelloClient(
         api_key=config["api_key"],
         secret=config["secret"],
