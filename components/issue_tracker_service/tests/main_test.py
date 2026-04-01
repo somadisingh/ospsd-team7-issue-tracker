@@ -4,6 +4,190 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+from issue_tracker_service.main import app, get_authenticated_client
+
+
+@pytest.fixture
+def raw_client() -> TestClient:
+    """TestClient without auth override — for testing auth validation."""
+    return TestClient(app)
+
+
+@pytest.mark.unit
+class TestAuthValidation:
+    """Test authentication and session token validation."""
+
+    def test_missing_session_token_returns_422(self, raw_client: TestClient) -> None:
+        response = raw_client.get("/boards")
+        assert response.status_code == 422
+
+    def test_invalid_session_token_returns_401(self, raw_client: TestClient) -> None:
+        response = raw_client.get("/boards", headers={"X-Session-Token": "nonexistent"})
+        assert response.status_code == 401
+        assert "Invalid" in response.json()["detail"]
+
+
+@pytest.mark.unit
+class TestRequestBodyValidation:
+    """Test that invalid request bodies are rejected with 422."""
+
+    def test_create_board_missing_name(self, test_client: TestClient) -> None:
+        response = test_client.post("/boards", json={}, headers={"X-Session-Token": "tok"})
+        assert response.status_code == 422
+
+    def test_create_board_wrong_type(self, test_client: TestClient) -> None:
+        response = test_client.post("/boards", json={"name": 123}, headers={"X-Session-Token": "tok"})
+        assert response.status_code == 422
+
+    def test_create_board_no_body(self, test_client: TestClient) -> None:
+        response = test_client.post("/boards", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 422
+
+    def test_create_issue_missing_title(self, test_client: TestClient) -> None:
+        response = test_client.post(
+            "/issues",
+            json={"list_id": "list_1"},
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 422
+
+    def test_create_issue_missing_list_id(self, test_client: TestClient) -> None:
+        response = test_client.post(
+            "/issues",
+            json={"title": "Task"},
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 422
+
+    def test_create_issue_empty_body(self, test_client: TestClient) -> None:
+        response = test_client.post("/issues", json={}, headers={"X-Session-Token": "tok"})
+        assert response.status_code == 422
+
+    def test_create_list_missing_name(self, test_client: TestClient) -> None:
+        response = test_client.post(
+            "/lists",
+            json={"board_id": "b1"},
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 422
+
+    def test_create_list_missing_board_id(self, test_client: TestClient) -> None:
+        response = test_client.post(
+            "/lists",
+            json={"name": "Col"},
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 422
+
+    def test_update_list_missing_name(self, test_client: TestClient) -> None:
+        response = test_client.put("/lists/list_1", json={}, headers={"X-Session-Token": "tok"})
+        assert response.status_code == 422
+
+    def test_update_status_missing_status(self, test_client: TestClient) -> None:
+        response = test_client.put("/issues/i1/status", json={}, headers={"X-Session-Token": "tok"})
+        assert response.status_code == 422
+
+    def test_add_member_missing_member_id(self, test_client: TestClient) -> None:
+        response = test_client.post("/boards/b1/members", json={}, headers={"X-Session-Token": "tok"})
+        assert response.status_code == 422
+
+    def test_assign_issue_missing_member_id(self, test_client: TestClient) -> None:
+        response = test_client.post("/issues/i1/assign", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 422
+
+
+@pytest.mark.unit
+class TestQueryParamValidation:
+    """Test query parameter boundary validation."""
+
+    def test_max_issues_zero_returns_422(self, test_client: TestClient) -> None:
+        response = test_client.get(
+            "/lists/list_1/issues?max_issues=0",
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 422
+
+    def test_max_issues_negative_returns_422(self, test_client: TestClient) -> None:
+        response = test_client.get(
+            "/lists/list_1/issues?max_issues=-5",
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 422
+
+    def test_max_issues_exceeds_limit_returns_422(self, test_client: TestClient) -> None:
+        response = test_client.get(
+            "/lists/list_1/issues?max_issues=501",
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 422
+
+    def test_max_issues_not_a_number_returns_422(self, test_client: TestClient) -> None:
+        response = test_client.get(
+            "/lists/list_1/issues?max_issues=abc",
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 422
+
+    def test_max_issues_at_lower_bound(
+        self,
+        test_client: TestClient,
+        mock_trello_client: MagicMock,
+        mock_issue: MagicMock,
+    ) -> None:
+        mock_trello_client.get_issues_in_list.return_value = [mock_issue]
+        response = test_client.get(
+            "/lists/list_1/issues?max_issues=1",
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 200
+
+    def test_max_issues_at_upper_bound(
+        self,
+        test_client: TestClient,
+        mock_trello_client: MagicMock,
+    ) -> None:
+        mock_trello_client.get_issues_in_list.return_value = []
+        response = test_client.get(
+            "/lists/list_1/issues?max_issues=500",
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 200
+
+
+@pytest.mark.unit
+class TestClientExceptionHandling:
+    """Test that downstream Trello client errors surface as 500s."""
+
+    @pytest.fixture
+    def error_client(self, mock_trello_client: MagicMock) -> TestClient:
+        app.dependency_overrides[get_authenticated_client] = lambda: mock_trello_client
+        client = TestClient(app, raise_server_exceptions=False)
+        yield client  # type: ignore[misc]
+        app.dependency_overrides.clear()
+
+    def test_get_board_trello_error(self, error_client: TestClient, mock_trello_client: MagicMock) -> None:
+        mock_trello_client.get_board.side_effect = Exception("Trello unavailable")
+        response = error_client.get("/boards/board_123", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 500
+
+    def test_create_issue_trello_error(self, error_client: TestClient, mock_trello_client: MagicMock) -> None:
+        mock_trello_client.create_issue.side_effect = Exception("rate limited")
+        response = error_client.post(
+            "/issues",
+            json={"title": "Task", "list_id": "l1"},
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 500
+
+    def test_delete_issue_trello_error(self, error_client: TestClient, mock_trello_client: MagicMock) -> None:
+        mock_trello_client.delete_issue.side_effect = Exception("timeout")
+        response = error_client.delete("/issues/i1", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 500
+
+    def test_get_lists_trello_error(self, error_client: TestClient, mock_trello_client: MagicMock) -> None:
+        mock_trello_client.get_lists.side_effect = Exception("connection reset")
+        response = error_client.get("/boards/b1/lists", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 500
 
 
 @pytest.mark.unit

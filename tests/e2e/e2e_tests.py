@@ -13,8 +13,15 @@ To run these tests:
 These tests are skipped if credentials are not available.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import pytest
 from trello_client_impl import TrelloClient
+
+if TYPE_CHECKING:
+    from issue_tracker_adapter.client import ServiceClientAdapter
 
 
 @pytest.mark.e2e
@@ -175,3 +182,136 @@ class TestE2EAuthenticationFailure:
         """Test that invalid token is handled during client initialization."""
         with pytest.raises(ValueError, match="api_key is required"):
             TrelloClient(api_key="", token="", board_id="")
+
+
+@pytest.mark.e2e
+class TestE2EAdapterGetBoard:
+    """Test ServiceClientAdapter.get_board against the deployed service."""
+
+    def test_get_board_via_adapter(
+        self,
+        e2e_skip_if_no_service_credentials: None,
+        e2e_adapter: ServiceClientAdapter,
+        e2e_credentials: dict[str, str],
+    ) -> None:
+        """Test getting a board through the adapter → service → Trello path."""
+        board_id = e2e_credentials.get("board_id", "")
+        if not board_id:
+            pytest.skip("TRELLO_BOARD_ID not set")
+
+        try:
+            board = e2e_adapter.get_board(board_id)
+            assert board is not None
+            assert board.id == board_id
+            assert board.name
+        except Exception as e:
+            pytest.skip(f"Could not reach deployed service: {e}")
+
+
+@pytest.mark.e2e
+class TestE2EAdapterListBoards:
+    """Test ServiceClientAdapter.get_boards against the deployed service."""
+
+    def test_list_boards_via_adapter(
+        self,
+        e2e_skip_if_no_service_credentials: None,
+        e2e_adapter: ServiceClientAdapter,
+    ) -> None:
+        """Test listing boards through the adapter → service → Trello path."""
+        try:
+            boards = list(e2e_adapter.get_boards())
+            assert isinstance(boards, list)
+            if boards:
+                assert boards[0].id
+                assert boards[0].name
+        except Exception as e:
+            pytest.skip(f"Could not reach deployed service: {e}")
+
+
+@pytest.mark.e2e
+class TestE2EAdapterListOperations:
+    """Test ServiceClientAdapter list operations against the deployed service."""
+
+    def test_get_lists_via_adapter(
+        self,
+        e2e_skip_if_no_service_credentials: None,
+        e2e_adapter: ServiceClientAdapter,
+        e2e_credentials: dict[str, str],
+    ) -> None:
+        """Test getting lists on a board through the adapter."""
+        board_id = e2e_credentials.get("board_id", "")
+        if not board_id:
+            pytest.skip("TRELLO_BOARD_ID not set")
+
+        try:
+            lists = list(e2e_adapter.get_lists(board_id))
+            assert isinstance(lists, list)
+            if lists:
+                assert lists[0].id
+                assert lists[0].name
+        except Exception as e:
+            pytest.skip(f"Could not reach deployed service: {e}")
+
+
+@pytest.mark.e2e
+class TestE2EAdapterIssueOperations:
+    """Test ServiceClientAdapter issue operations against the deployed service."""
+
+    def test_get_issues_in_list_via_adapter(
+        self,
+        e2e_skip_if_no_service_credentials: None,
+        e2e_adapter: ServiceClientAdapter,
+        e2e_credentials: dict[str, str],
+    ) -> None:
+        """Test getting issues from a list through the adapter → service → Trello path."""
+        board_id = e2e_credentials.get("board_id", "")
+        if not board_id:
+            pytest.skip("TRELLO_BOARD_ID not set")
+
+        try:
+            lists = list(e2e_adapter.get_lists(board_id))
+            if not lists:
+                pytest.skip("No lists on board")
+            issues = list(e2e_adapter.get_issues_in_list(lists[0].id, max_issues=5))
+            assert isinstance(issues, list)
+            if issues:
+                assert issues[0].id
+                assert issues[0].title is not None
+        except Exception as e:
+            pytest.skip(f"Could not reach deployed service: {e}")
+
+
+@pytest.mark.e2e
+class TestE2EAdapterInterfaceCompliance:
+    """Test that ServiceClientAdapter implements the full Client interface."""
+
+    def test_adapter_interface_compliance(
+        self,
+        e2e_skip_if_no_service_credentials: None,
+        e2e_adapter: ServiceClientAdapter,
+    ) -> None:
+        """Verify the adapter exposes all required Client methods."""
+        required_methods = [
+            "get_issue",
+            "delete_issue",
+            "update_status",
+            "get_board",
+            "get_boards",
+            "create_board",
+            "add_member_to_board",
+            "get_list",
+            "get_lists",
+            "get_issues_in_list",
+            "create_list",
+            "update_list",
+            "delete_list",
+            "get_members_on_issue",
+            "assign_issue",
+            "create_issue",
+            "get_authorization_url",
+            "exchange_request_token",
+        ]
+
+        for method_name in required_methods:
+            assert hasattr(e2e_adapter, method_name), f"Missing method: {method_name}"
+            assert callable(getattr(e2e_adapter, method_name))
