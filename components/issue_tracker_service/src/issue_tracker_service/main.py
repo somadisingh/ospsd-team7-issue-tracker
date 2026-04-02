@@ -49,7 +49,6 @@ def _member_to_response(member: issue_tracker_client_api.Member) -> MemberRespon
 class BoardResponse(BaseModel):
     id: str
     name: str
-    url: Optional[str] = None
 
 
 class ListResponse(BaseModel):
@@ -61,7 +60,6 @@ class ListResponse(BaseModel):
 class IssueResponse(BaseModel):
     id: str
     title: str
-    description: Optional[str] = None
     list_id: str
     board_id: str
     is_complete: bool
@@ -97,6 +95,10 @@ class CreateIssueRequest(BaseModel):
 
 class UpdateStatusRequest(BaseModel):
     status: str
+
+
+class AssignIssueRequest(BaseModel):
+    member_id: str
 
 
 def get_authenticated_client(x_session_token: str = Header(..., alias="X-Session-Token")) -> TrelloClient:
@@ -224,7 +226,7 @@ async def get_issue_members(
 
 @app.post("/issues/{issue_id}/assign", response_model=Dict[str, bool])
 async def assign_issue(
-    issue_id: str, member_id: str, client: TrelloClient = Depends(get_authenticated_client)
+    issue_id: str, body: AssignIssueRequest, client: TrelloClient = Depends(get_authenticated_client)
 ) -> Dict[str, bool]:
-    success = client.assign_issue(issue_id=issue_id, member_id=member_id)
+    success = client.assign_issue(issue_id=issue_id, member_id=body.member_id)
     return {"success": success}
