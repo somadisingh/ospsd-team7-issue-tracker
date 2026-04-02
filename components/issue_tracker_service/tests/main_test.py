@@ -95,6 +95,10 @@ class TestRequestBodyValidation:
         response = test_client.post("/issues/i1/assign", headers={"X-Session-Token": "tok"})
         assert response.status_code == 422
 
+    def test_assign_issue_missing_member_id_in_body(self, test_client: TestClient) -> None:
+        response = test_client.post("/issues/i1/assign", json={}, headers={"X-Session-Token": "tok"})
+        assert response.status_code == 422
+
 
 @pytest.mark.unit
 class TestQueryParamValidation:
@@ -638,7 +642,8 @@ class TestMemberEndpoints:
         mock_trello_client.assign_issue.return_value = True
 
         response = test_client.post(
-            "/issues/issue_789/assign?member_id=member_abc",
+            "/issues/issue_789/assign",
+            json={"member_id": "member_abc"},
             headers={"X-Session-Token": "tok"},
         )
 
