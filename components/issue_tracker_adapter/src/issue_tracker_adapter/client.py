@@ -74,6 +74,9 @@ from issue_tracker_service_client.client import Client as HttpClient
 from issue_tracker_service_client.models.add_member_to_board_request import (
     AddMemberToBoardRequest,
 )
+from issue_tracker_service_client.models.assign_issue_request import (
+    AssignIssueRequest,
+)
 from issue_tracker_service_client.models.board_response import BoardResponse
 from issue_tracker_service_client.models.create_board_request import (
     CreateBoardRequest,
@@ -318,7 +321,7 @@ class ServiceClientAdapter(Client):
         result = self._call_api(
             assign_api.sync,
             issue_id=issue_id,
-            member_id=member_id,
+            body=AssignIssueRequest(member_id=member_id),
         )
         if result is None:
             return False

@@ -111,18 +111,50 @@ All API routes below are served by **`issue_tracker_service`** unless noted. Mut
 | PUT | `/issues/{issue_id}/status` | `{"status": "..."}` | `{"success": bool}` |
 | DELETE | `/issues/{issue_id}` | — | `{"success": bool}` |
 | GET | `/issues/{issue_id}/members` | — | `[MemberResponse, ...]` |
-| POST | `/issues/{issue_id}/assign` | `member_id` as query param | `{"success": bool}` |
+| POST | `/issues/{issue_id}/assign` | `{"member_id": "..."}` | `{"success": bool}` |
 
 OpenAPI details and try-it-out UI: **`GET /docs`** (Swagger UI) when the service is running.
 
 ### Error handling
 
+**Domain exception hierarchy (`issue_tracker_client_api.exceptions`)**
+
+The ABC layer defines a set of domain-specific exceptions so that both implementations and consumers can handle errors without depending on transport-level details:
+
+| Exception | When raised |
+|-----------|-------------|
+| `IssueTrackerError` | Base class for all domain errors |
+| `ResourceNotFoundError` | Board, issue, list, or member does not exist |
+| `AuthenticationError` | Credentials are invalid or expired |
+| `ServiceUnavailableError` | Upstream service is unreachable or returned a server error |
+| `ValidationError` | Input data fails domain-level validation |
+
 **How Trello / library errors become HTTP responses**
+
+- **`trello_client_impl` boundary:** The `_request` helper in `TrelloClient` catches `requests` HTTP errors and translates them into domain exceptions:
+
+  | HTTP status / error | Domain exception raised |
+  |---------------------|------------------------|
+  | `401 Unauthorized` | `AuthenticationError` |
+  | `404 Not Found` | `ResourceNotFoundError` |
+  | `5xx Server Error` | `ServiceUnavailableError` |
+  | Other HTTP errors | `IssueTrackerError` |
+  | `ConnectionError` | `ServiceUnavailableError` |
+  | `Timeout` | `ServiceUnavailableError` |
+
+- **FastAPI service boundary:** The service registers `@app.exception_handler` handlers that map domain exceptions to HTTP status codes:
+
+  | Domain exception | HTTP response |
+  |-----------------|---------------|
+  | `ResourceNotFoundError` | **`404 Not Found`** |
+  | `AuthenticationError` | **`401 Unauthorized`** |
+  | `ServiceUnavailableError` | **`502 Bad Gateway`** |
+  | `IssueTrackerError` (generic) | **`500 Internal Server Error`** |
 
 - **FastAPI / Pydantic validation:** Invalid JSON, missing required fields, or wrong types → **`422 Unprocessable Entity`** with validation detail (e.g. missing `name` on `POST /boards`).
 - **Missing / bad session:** No or unknown `X-Session-Token` on protected routes → **`401 Unauthorized`** (`"Invalid or missing session token"`).
 - **OAuth routes (`/auth/...`):** Explicit `HTTPException` paths (e.g. failed token exchange) → **`500`** or other status with a `detail` string as implemented in `routes/auth.py`.
-- **Trello / `TrelloClient` errors:** Route handlers generally **do not wrap** `client.*` calls in `try/except`. Exceptions raised inside `trello_client_impl` (e.g. `ValueError`, `TypeError`, or HTTP-related failures from `requests`) propagate to FastAPI and are turned into a generic **`500 Internal Server Error`** response for unhandled exceptions. There is **no** dedicated mapping from Trello error codes to per-status HTTP responses in the current service layer.
+
 - **Adapter / generated client:** The adapter's `_call_api` helper centralizes HTTP error translation so callers receive standard Python exceptions instead of raw `httpx` or generated-client errors:
 
   | Generated-client error | Adapter raises | Example scenario |
@@ -134,7 +166,7 @@ OpenAPI details and try-it-out UI: **`GET /docs`** (Swagger UI) when the service
   | `HTTPValidationError` (422 response) | **`ValueError`** | Request body failed Pydantic validation on the service |
   | Successful response with wrong type | **`TypeError`** | `_ensure_*` helpers detect `None` or unexpected model |
 
-  This centralizes error handling in the adapter rather than exposing raw transport exceptions to the caller.
+  This centralizes error handling at both boundaries rather than exposing raw transport exceptions to the caller.
 
 ---
 

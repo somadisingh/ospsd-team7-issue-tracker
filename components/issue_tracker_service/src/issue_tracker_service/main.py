@@ -1,15 +1,24 @@
 from __future__ import annotations
 
+import logging
 from typing import Dict, List, Optional
 
 import issue_tracker_client_api
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
+from issue_tracker_client_api.exceptions import (
+    AuthenticationError,
+    IssueTrackerError,
+    ResourceNotFoundError,
+    ServiceUnavailableError,
+)
 from pydantic import BaseModel
 
 from trello_client_impl.client import TrelloClient
 from .routes.health import router as health_router
 from .routes.auth import _trello_config, router as auth_router
 
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Issue Tracker Service", version="0.1.0")
 
@@ -19,6 +28,33 @@ app.include_router(auth_router)
 
 # In-memory state (mini-demo). Replace with per-user DB for production.
 user_sessions: Dict[str, Dict[str, str]] = {}
+
+
+@app.exception_handler(ResourceNotFoundError)
+async def _resource_not_found_handler(request: Request, exc: ResourceNotFoundError) -> JSONResponse:
+    logger.warning("Resource not found: %s", exc)
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(AuthenticationError)
+async def _authentication_error_handler(request: Request, exc: AuthenticationError) -> JSONResponse:
+    logger.warning("Upstream authentication error: %s", exc)
+    return JSONResponse(status_code=401, content={"detail": str(exc)})
+
+
+@app.exception_handler(ServiceUnavailableError)
+async def _service_unavailable_handler(request: Request, exc: ServiceUnavailableError) -> JSONResponse:
+    logger.error("Upstream service unavailable: %s", exc)
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+
+@app.exception_handler(IssueTrackerError)
+async def _issue_tracker_error_handler(request: Request, exc: IssueTrackerError) -> JSONResponse:
+    logger.error("Issue tracker error: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Upstream service error: {exc}"},
+    )
 
 
 def _board_to_response(board: issue_tracker_client_api.Board) -> BoardResponse:

@@ -7,6 +7,7 @@ from .add_member_to_board_request import AddMemberToBoardRequest
 from .assign_issue_issues_issue_id_assign_post_response_assign_issue_issues_issue_id_assign_post import (
     AssignIssueIssuesIssueIdAssignPostResponseAssignIssueIssuesIssueIdAssignPost,
 )
+from .assign_issue_request import AssignIssueRequest
 from .auth_callback_response import AuthCallbackResponse
 from .board_response import BoardResponse
 from .create_board_request import CreateBoardRequest
@@ -35,6 +36,7 @@ __all__ = (
     "AddMemberToBoardBoardsBoardIdMembersPostResponseAddMemberToBoardBoardsBoardIdMembersPost",
     "AddMemberToBoardRequest",
     "AssignIssueIssuesIssueIdAssignPostResponseAssignIssueIssuesIssueIdAssignPost",
+    "AssignIssueRequest",
     "AuthCallbackResponse",
     "BoardResponse",
     "CreateBoardRequest",

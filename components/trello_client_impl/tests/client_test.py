@@ -4,6 +4,13 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+import requests as requests_lib
+from issue_tracker_client_api.exceptions import (
+    AuthenticationError,
+    IssueTrackerError,
+    ResourceNotFoundError,
+    ServiceUnavailableError,
+)
 from pytest_mock import MockerFixture
 from trello_client_impl import (
     TrelloClient,
@@ -765,3 +772,87 @@ class TestRegister:
     def test_register_function_exists(self) -> None:
         """Test that register function is callable."""
         assert callable(register)
+
+
+@pytest.mark.unit
+class TestHTTPErrorTranslation:
+    """Test that Trello HTTP errors are translated to domain exceptions."""
+
+    @pytest.fixture
+    def client(self) -> TrelloClient:
+        return TrelloClient(api_key="key", token="tok")
+
+    def _make_http_error(self, status_code: int) -> requests_lib.exceptions.HTTPError:
+        resp = MagicMock()
+        resp.status_code = status_code
+        return requests_lib.exceptions.HTTPError(response=resp)
+
+    def test_401_raises_authentication_error(
+        self, client: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        mocker.patch(
+            "trello_client_impl.client.requests.request",
+            side_effect=self._make_http_error(401),
+        )
+        with pytest.raises(AuthenticationError, match="authentication failed"):
+            client.get_board("b1")
+
+    def test_404_raises_resource_not_found(
+        self, client: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        mocker.patch(
+            "trello_client_impl.client.requests.request",
+            side_effect=self._make_http_error(404),
+        )
+        with pytest.raises(ResourceNotFoundError):
+            client.get_issue("bad_id")
+
+    def test_500_raises_service_unavailable(
+        self, client: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        mocker.patch(
+            "trello_client_impl.client.requests.request",
+            side_effect=self._make_http_error(500),
+        )
+        with pytest.raises(ServiceUnavailableError, match="server error 500"):
+            client.get_board("b1")
+
+    def test_500_raises_service_unavailable_on_iterator(
+        self, client: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        mocker.patch(
+            "trello_client_impl.client.requests.request",
+            side_effect=self._make_http_error(500),
+        )
+        with pytest.raises(ServiceUnavailableError):
+            list(client.get_boards())
+
+    def test_other_http_error_raises_tracker_error(
+        self, client: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        mocker.patch(
+            "trello_client_impl.client.requests.request",
+            side_effect=self._make_http_error(429),
+        )
+        with pytest.raises(IssueTrackerError, match="status 429"):
+            client.get_board("b1")
+
+    def test_connection_error_raises_service_unavailable(
+        self, client: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        mocker.patch(
+            "trello_client_impl.client.requests.request",
+            side_effect=requests_lib.exceptions.ConnectionError("refused"),
+        )
+        with pytest.raises(ServiceUnavailableError, match="Could not connect"):
+            client.get_board("b1")
+
+    def test_timeout_raises_service_unavailable(
+        self, client: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        mocker.patch(
+            "trello_client_impl.client.requests.request",
+            side_effect=requests_lib.exceptions.Timeout("timed out"),
+        )
+        with pytest.raises(ServiceUnavailableError, match="timed out"):
+            client.get_board("b1")

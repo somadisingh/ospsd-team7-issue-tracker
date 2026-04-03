@@ -9,32 +9,30 @@ from ...client import AuthenticatedClient, Client
 from ...models.assign_issue_issues_issue_id_assign_post_response_assign_issue_issues_issue_id_assign_post import (
     AssignIssueIssuesIssueIdAssignPostResponseAssignIssueIssuesIssueIdAssignPost,
 )
+from ...models.assign_issue_request import AssignIssueRequest
 from ...models.http_validation_error import HTTPValidationError
-from ...types import UNSET, Response
+from ...types import Response
 
 
 def _get_kwargs(
     issue_id: str,
     *,
-    member_id: str,
+    body: AssignIssueRequest,
     x_session_token: str,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
     headers["X-Session-Token"] = x_session_token
-
-    params: dict[str, Any] = {}
-
-    params["member_id"] = member_id
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/issues/{issue_id}/assign".format(
             issue_id=quote(str(issue_id), safe=""),
         ),
-        "params": params,
     }
+
+    _kwargs["json"] = body.to_dict()
+
+    headers["Content-Type"] = "application/json"
 
     _kwargs["headers"] = headers
     return _kwargs
@@ -76,15 +74,15 @@ def sync_detailed(
     issue_id: str,
     *,
     client: AuthenticatedClient | Client,
-    member_id: str,
+    body: AssignIssueRequest,
     x_session_token: str,
 ) -> Response[AssignIssueIssuesIssueIdAssignPostResponseAssignIssueIssuesIssueIdAssignPost | HTTPValidationError]:
     """Assign Issue
 
     Args:
         issue_id (str):
-        member_id (str):
         x_session_token (str):
+        body (AssignIssueRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -96,7 +94,7 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         issue_id=issue_id,
-        member_id=member_id,
+        body=body,
         x_session_token=x_session_token,
     )
 
@@ -111,15 +109,15 @@ def sync(
     issue_id: str,
     *,
     client: AuthenticatedClient | Client,
-    member_id: str,
+    body: AssignIssueRequest,
     x_session_token: str,
 ) -> AssignIssueIssuesIssueIdAssignPostResponseAssignIssueIssuesIssueIdAssignPost | HTTPValidationError | None:
     """Assign Issue
 
     Args:
         issue_id (str):
-        member_id (str):
         x_session_token (str):
+        body (AssignIssueRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -132,7 +130,7 @@ def sync(
     return sync_detailed(
         issue_id=issue_id,
         client=client,
-        member_id=member_id,
+        body=body,
         x_session_token=x_session_token,
     ).parsed
 
@@ -141,15 +139,15 @@ async def asyncio_detailed(
     issue_id: str,
     *,
     client: AuthenticatedClient | Client,
-    member_id: str,
+    body: AssignIssueRequest,
     x_session_token: str,
 ) -> Response[AssignIssueIssuesIssueIdAssignPostResponseAssignIssueIssuesIssueIdAssignPost | HTTPValidationError]:
     """Assign Issue
 
     Args:
         issue_id (str):
-        member_id (str):
         x_session_token (str):
+        body (AssignIssueRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -161,7 +159,7 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         issue_id=issue_id,
-        member_id=member_id,
+        body=body,
         x_session_token=x_session_token,
     )
 
@@ -174,15 +172,15 @@ async def asyncio(
     issue_id: str,
     *,
     client: AuthenticatedClient | Client,
-    member_id: str,
+    body: AssignIssueRequest,
     x_session_token: str,
 ) -> AssignIssueIssuesIssueIdAssignPostResponseAssignIssueIssuesIssueIdAssignPost | HTTPValidationError | None:
     """Assign Issue
 
     Args:
         issue_id (str):
-        member_id (str):
         x_session_token (str):
+        body (AssignIssueRequest):
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -196,7 +194,7 @@ async def asyncio(
         await asyncio_detailed(
             issue_id=issue_id,
             client=client,
-            member_id=member_id,
+            body=body,
             x_session_token=x_session_token,
         )
     ).parsed

@@ -4,6 +4,12 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+from issue_tracker_client_api.exceptions import (
+    AuthenticationError,
+    IssueTrackerError,
+    ResourceNotFoundError,
+    ServiceUnavailableError,
+)
 from issue_tracker_service.main import app, get_authenticated_client
 
 
@@ -160,7 +166,7 @@ class TestQueryParamValidation:
 
 @pytest.mark.unit
 class TestClientExceptionHandling:
-    """Test that downstream Trello client errors surface as 500s."""
+    """Test that downstream Trello client errors surface with proper HTTP codes."""
 
     @pytest.fixture
     def error_client(self, mock_trello_client: MagicMock) -> TestClient:
@@ -192,6 +198,61 @@ class TestClientExceptionHandling:
         mock_trello_client.get_lists.side_effect = Exception("connection reset")
         response = error_client.get("/boards/b1/lists", headers={"X-Session-Token": "tok"})
         assert response.status_code == 500
+
+
+@pytest.mark.unit
+class TestDomainExceptionHandlers:
+    """Test that domain-specific exceptions map to correct HTTP status codes."""
+
+    @pytest.fixture
+    def error_client(self, mock_trello_client: MagicMock) -> TestClient:
+        app.dependency_overrides[get_authenticated_client] = lambda: mock_trello_client
+        client = TestClient(app, raise_server_exceptions=False)
+        yield client  # type: ignore[misc]
+        app.dependency_overrides.clear()
+
+    def test_resource_not_found_returns_404(self, error_client: TestClient, mock_trello_client: MagicMock) -> None:
+        mock_trello_client.get_board.side_effect = ResourceNotFoundError("board", "bad_id")
+        response = error_client.get("/boards/bad_id", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"]
+
+    def test_authentication_error_returns_401(self, error_client: TestClient, mock_trello_client: MagicMock) -> None:
+        mock_trello_client.get_boards.side_effect = AuthenticationError("bad creds")
+        response = error_client.get("/boards", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 401
+
+    def test_service_unavailable_returns_502(self, error_client: TestClient, mock_trello_client: MagicMock) -> None:
+        mock_trello_client.get_issue.side_effect = ServiceUnavailableError("Trello down")
+        response = error_client.get("/issues/i1", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 502
+
+    def test_generic_tracker_error_returns_500(self, error_client: TestClient, mock_trello_client: MagicMock) -> None:
+        mock_trello_client.create_board.side_effect = IssueTrackerError("something broke")
+        response = error_client.post(
+            "/boards",
+            json={"name": "Test"},
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 500
+        assert "Upstream service error" in response.json()["detail"]
+
+    def test_not_found_on_issue_returns_404(self, error_client: TestClient, mock_trello_client: MagicMock) -> None:
+        mock_trello_client.get_issue.side_effect = ResourceNotFoundError("issue", "xyz")
+        response = error_client.get("/issues/xyz", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 404
+
+    def test_not_found_on_list_returns_404(self, error_client: TestClient, mock_trello_client: MagicMock) -> None:
+        mock_trello_client.get_list.side_effect = ResourceNotFoundError("list", "l99")
+        response = error_client.get("/lists/l99", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 404
+
+    def test_service_unavailable_on_delete_returns_502(
+        self, error_client: TestClient, mock_trello_client: MagicMock
+    ) -> None:
+        mock_trello_client.delete_issue.side_effect = ServiceUnavailableError("timeout")
+        response = error_client.delete("/issues/i1", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 502
 
 
 @pytest.mark.unit

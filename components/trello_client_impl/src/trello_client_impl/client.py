@@ -10,6 +10,12 @@ from typing import Any
 import issue_tracker_client_api
 import requests
 from issue_tracker_client_api import Board, Client, Issue, List, Member
+from issue_tracker_client_api.exceptions import (
+    AuthenticationError,
+    IssueTrackerError,
+    ResourceNotFoundError,
+    ServiceUnavailableError,
+)
 from requests_oauthlib import OAuth1, OAuth1Session  # type: ignore[import-untyped]
 
 from .board import TrelloBoard, _is_trello_board_response
@@ -152,16 +158,40 @@ class TrelloClient(Client):
     ) -> dict[str, Any] | list[Any] | None:
         url = f"{BASE_URL}{path}" if path.startswith("/") else f"{BASE_URL}/{path}"
         req_params = {**self._query(), **(params or {})}
-        resp = requests.request(
-            method,
-            url,
-            headers={"Accept": "application/json"},
-            params=req_params,
-            json=json_payload,
-            auth=self._oauth,
-            timeout=30,
-        )
-        resp.raise_for_status()
+        try:
+            resp = requests.request(
+                method,
+                url,
+                headers={"Accept": "application/json"},
+                params=req_params,
+                json=json_payload,
+                auth=self._oauth,
+                timeout=30,
+            )
+            resp.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else 0
+            if status == 401:  # noqa: PLR2004
+                raise AuthenticationError(
+                    "Trello authentication failed — check API key and token"
+                ) from exc
+            if status == 404:  # noqa: PLR2004
+                raise ResourceNotFoundError("resource", path) from exc
+            if status >= 500:  # noqa: PLR2004
+                raise ServiceUnavailableError(
+                    f"Trello API returned server error {status}"
+                ) from exc
+            raise IssueTrackerError(
+                f"Trello API request failed with status {status}"
+            ) from exc
+        except requests.exceptions.ConnectionError as exc:
+            raise ServiceUnavailableError(
+                f"Could not connect to Trello API: {exc}"
+            ) from exc
+        except requests.exceptions.Timeout as exc:
+            raise ServiceUnavailableError(
+                f"Trello API request timed out: {exc}"
+            ) from exc
         return resp.json() if resp.content else None
 
     def get_issue(self, issue_id: str) -> Issue:
