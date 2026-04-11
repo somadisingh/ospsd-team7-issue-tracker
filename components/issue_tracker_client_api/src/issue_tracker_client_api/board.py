@@ -1,22 +1,8 @@
-"""Board contract - Core board representation."""
+"""Board contract - re-exports the shared vertical Board ABC."""
 
-from abc import ABC, abstractmethod
+from api.board import Board
 
-
-class Board(ABC):
-    """Abstract base class representing a board in the issue tracker."""
-
-    @property
-    @abstractmethod
-    def id(self) -> str:
-        """Return the unique identifier of the board."""
-        raise NotImplementedError("Subclasses must implement id")
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Return the name of the board."""
-        raise NotImplementedError("Subclasses must implement name")
+__all__ = ["Board"]
 
 
 def get_board(board_id: str) -> Board:

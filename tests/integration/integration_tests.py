@@ -4,6 +4,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from api.issue import Status
 from issue_tracker_adapter import ServiceClientAdapter
 from issue_tracker_adapter import register as adapter_register
 from issue_tracker_adapter.board import ServiceBoard
@@ -45,11 +46,15 @@ class TestClientInterfaceImplementation:
         client = TrelloClient(**integration_credentials)
         required_methods = [
             "get_issue",
+            "get_issues",
             "delete_issue",
-            "update_status",
+            "update_issue",
             "get_board",
             "get_boards",
             "create_board",
+            "update_board",
+            "delete_board",
+            "create_issue",
             "add_member_to_board",
             "get_list",
             "get_lists",
@@ -59,7 +64,6 @@ class TestClientInterfaceImplementation:
             "delete_list",
             "get_members_on_issue",
             "assign_issue",
-            "create_issue",
         ]
         for method in required_methods:
             assert hasattr(client, method)
@@ -75,9 +79,11 @@ class TestTrelloCardInterfaceImplementation:
         card = TrelloCard(
             id="test_id",
             title="Test",
-            is_complete=False,
+            desc="A description",
+            members=["user1"],
+            due_date="2026-02-15",
+            status=Status.TO_DO,
             board_id="board_1",
-            list_id="test_list_id",
         )
         assert isinstance(card, Issue)
 
@@ -86,14 +92,18 @@ class TestTrelloCardInterfaceImplementation:
         card = TrelloCard(
             id="test_id",
             title="Test",
-            is_complete=False,
+            desc="A description",
+            members=["user1"],
+            due_date="2026-02-15",
+            status=Status.IN_PROGRESS,
             board_id="board_1",
-            list_id="test_list_id",
         )
         assert hasattr(card, "id")
         assert hasattr(card, "title")
-        assert hasattr(card, "is_complete")
-        assert hasattr(card, "list_id")
+        assert hasattr(card, "desc")
+        assert hasattr(card, "members")
+        assert hasattr(card, "due_date")
+        assert hasattr(card, "status")
         assert hasattr(card, "board_id")
 
 
@@ -110,9 +120,9 @@ class TestTrelloBoardInterfaceImplementation:
         """Test that TrelloBoard implements all Board properties."""
         board = TrelloBoard(id="board_id", name="Test Board")
         assert hasattr(board, "id")
-        assert hasattr(board, "name")
+        assert hasattr(board, "board_name")
         assert board.id == "board_id"
-        assert board.name == "Test Board"
+        assert board.board_name == "Test Board"
 
 
 @pytest.mark.integration
@@ -154,13 +164,13 @@ class TestTrelloMemberInterfaceImplementation:
 class TestClientWorkflows:
     """Test multi-step client workflows with mocked requests."""
 
-    def test_get_issue_and_update_status_workflow(
+    def test_get_issue_and_update_issue_workflow(
         self,
         integration_credentials: dict[str, str],
         mocker: MockerFixture,
         mock_issue_response: dict[str, Any],
     ) -> None:
-        """Test workflow: get issue then update its status."""
+        """Test workflow: get issue then update it."""
         mock_response = MagicMock()
         mock_response.json.return_value = mock_issue_response
         mock_request = mocker.patch(
@@ -168,16 +178,13 @@ class TestClientWorkflows:
             return_value=mock_response,
         )
 
-        client = TrelloClient(
-            **integration_credentials,
-            status_list_ids={"complete": "list_done_id"},
-        )
+        client = TrelloClient(**integration_credentials)
 
         issue = client.get_issue("issue_id")
         assert issue is not None
 
-        result = client.update_status("issue_id", "complete")
-        assert result is True
+        updated = client.update_issue("issue_id", title="Updated Title")
+        assert updated is not None
         assert mock_request.call_count >= 2
 
     def test_get_board_and_lists_and_issues_workflow(
@@ -194,6 +201,7 @@ class TestClientWorkflows:
             mock_board_response,
             [mock_list_response],
             [mock_issue_response],
+            mock_list_response,
         ]
         mocker.patch(
             "trello_client_impl.client.requests.request",
@@ -288,11 +296,15 @@ class TestAdapterInterfaceImplementation:
         )
         required_methods = [
             "get_issue",
+            "get_issues",
             "delete_issue",
-            "update_status",
+            "update_issue",
             "get_board",
             "get_boards",
             "create_board",
+            "update_board",
+            "delete_board",
+            "create_issue",
             "add_member_to_board",
             "get_list",
             "get_lists",
@@ -302,7 +314,6 @@ class TestAdapterInterfaceImplementation:
             "delete_list",
             "get_members_on_issue",
             "assign_issue",
-            "create_issue",
         ]
         for method in required_methods:
             assert hasattr(adapter, method)
@@ -314,18 +325,24 @@ class TestAdapterDomainObjects:
     """Test that adapter domain objects implement the correct interfaces."""
 
     def test_service_board_is_instance_of_board(self) -> None:
-        board = ServiceBoard(id="b1", name="Test")
+        board = ServiceBoard(id="b1", board_name="Test")
         assert isinstance(board, Board)
+        assert board.board_name == "Test"
 
     def test_service_issue_is_instance_of_issue(self) -> None:
         issue = ServiceIssue(
             id="i1",
             title="T",
-            is_complete=False,
-            list_id="l1",
+            desc="description",
+            members=["user1"],
+            due_date="2026-02-15",
+            status=Status.TO_DO,
             board_id="b1",
         )
         assert isinstance(issue, Issue)
+        assert issue.desc == "description"
+        assert issue.status == Status.TO_DO
+        assert issue.board_id == "b1"
 
     def test_service_list_is_instance_of_list(self) -> None:
         lst = ServiceList(id="l1", name="To Do", board_id="b1")
@@ -367,7 +384,7 @@ class TestAdapterFactoryAndRegistration:
         """Verify adapter correctly converts auto-generated BoardResponse to Board ABC."""
         resp = MagicMock(spec=BoardResponse)
         resp.id = "b1"
-        resp.name = "Board"
+        resp.board_name = "Board"
         mock_api.sync.return_value = [resp]
 
         client = adapter_get_client_impl(
@@ -385,8 +402,10 @@ class TestAdapterFactoryAndRegistration:
         resp = MagicMock(spec=IssueResponse)
         resp.id = "i1"
         resp.title = "Task"
-        resp.is_complete = False
-        resp.list_id = "l1"
+        resp.desc = "description"
+        resp.members = ["user1"]
+        resp.due_date = "2026-02-15"
+        resp.status = "to_do"
         resp.board_id = "b1"
         mock_api.sync.return_value = resp
 

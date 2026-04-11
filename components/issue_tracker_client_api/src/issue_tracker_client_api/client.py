@@ -1,9 +1,19 @@
-"""Core issue tracker client contract definitions and factory placeholder."""
+"""Core issue tracker client contract.
 
-from abc import ABC, abstractmethod
+Extends the shared vertical Client ABC with authentication methods
+and internal List/Member operations specific to our team's
+Trello-based implementation.  The shared interface defines the CRUD
+operations that all issue-tracker verticals implement; this module
+adds the auth layer and domain-specific helpers each team manages
+independently.
+"""
+
+from abc import abstractmethod
 from collections.abc import Iterator
 
-from issue_tracker_client_api.board import Board
+from api.client import Client as SharedClient
+from api.client import get_client
+
 from issue_tracker_client_api.issue import Issue
 from issue_tracker_client_api.list import List
 from issue_tracker_client_api.member import Member
@@ -11,53 +21,19 @@ from issue_tracker_client_api.member import Member
 __all__ = ["Client", "get_client"]
 
 
-class Client(ABC):
-    """Abstract base class representing an issue tracker client for managing issues."""
+class Client(SharedClient):  # type: ignore[misc]
+    """Extended issue-tracker client with OAuth and internal List/Member support.
 
-    @abstractmethod
-    def get_issue(self, issue_id: str) -> Issue:
-        """Return a single issue by its ID."""
-        raise NotImplementedError("Subclasses must implement get_issue")
+    Inherits all shared CRUD operations (Board and Issue) from the
+    vertical's shared API and adds:
+    * OAuth 1.0a authentication methods
+    * Internal List operations (Trello lists ↔ status columns)
+    * Internal Member operations (board members, issue assignment)
+    """
 
-    @abstractmethod
-    def delete_issue(self, issue_id: str) -> bool:
-        """Delete an issue by its ID."""
-        raise NotImplementedError("Subclasses must implement delete_issue")
-
-    @abstractmethod
-    def update_status(self, issue_id: str, status: str) -> bool:
-        """Update an issue's status (e.g. 'todo', 'in_progress', 'complete')."""
-        raise NotImplementedError("Subclasses must implement update_status")
-
-    @abstractmethod
-    def get_board(self, board_id: str) -> Board:
-        """Return a single board by its ID."""
-        raise NotImplementedError("Subclasses must implement get_board")
-
-    @abstractmethod
-    def get_boards(self) -> Iterator[Board]:
-        """Return an iterator of boards for the authenticated user."""
-        raise NotImplementedError("Subclasses must implement get_boards")
-
-    @abstractmethod
-    def create_board(self, name: str) -> Board:
-        """Create a new board and return it."""
-        raise NotImplementedError("Subclasses must implement create_board")
-
-    @abstractmethod
-    def add_member_to_board(self, board_id: str, member_id: str) -> bool:
-        """Add an existing member to the board. Returns True on success."""
-        raise NotImplementedError("Subclasses must implement add_member_to_board")
-
-    @abstractmethod
-    def get_list(self, list_id: str) -> List:
-        """Return a single list by its ID."""
-        raise NotImplementedError("Subclasses must implement get_list")
-
-    @abstractmethod
-    def get_lists(self, board_id: str) -> Iterator[List]:
-        """Return an iterator of lists on the board."""
-        raise NotImplementedError("Subclasses must implement get_lists")
+    # ------------------------------------------------------------------ #
+    # OAuth
+    # ------------------------------------------------------------------ #
 
     @abstractmethod
     def get_authorization_url(self, callback_url: str | None = None) -> str:
@@ -68,6 +44,20 @@ class Client(ABC):
     def exchange_request_token(self, oauth_token: str, oauth_verifier: str) -> None:
         """Exchange the request token for an access token."""
         raise NotImplementedError("Subclasses must implement exchange_request_token")
+
+    # ------------------------------------------------------------------ #
+    # Internal List operations
+    # ------------------------------------------------------------------ #
+
+    @abstractmethod
+    def get_list(self, list_id: str) -> List:
+        """Return a single list by its ID."""
+        raise NotImplementedError("Subclasses must implement get_list")
+
+    @abstractmethod
+    def get_lists(self, board_id: str) -> Iterator[List]:
+        """Return an iterator of lists on the board."""
+        raise NotImplementedError("Subclasses must implement get_lists")
 
     @abstractmethod
     def get_issues_in_list(
@@ -91,6 +81,10 @@ class Client(ABC):
         """Delete (archive) a list. Updates available statuses on the board."""
         raise NotImplementedError("Subclasses must implement delete_list")
 
+    # ------------------------------------------------------------------ #
+    # Internal Member operations
+    # ------------------------------------------------------------------ #
+
     @abstractmethod
     def get_members_on_issue(self, issue_id: str) -> list[Member]:
         """Return members assigned to the issue."""
@@ -102,17 +96,6 @@ class Client(ABC):
         raise NotImplementedError("Subclasses must implement assign_issue")
 
     @abstractmethod
-    def create_issue(
-        self,
-        title: str,
-        list_id: str,
-        *,
-        description: str | None = None,
-    ) -> Issue:
-        """Create a new issue in the given list."""
-        raise NotImplementedError("Subclasses must implement create_issue")
-
-
-def get_client(*, interactive: bool = False) -> Client:
-    """Return an instance of the concrete implementation of an issue tracker client."""
-    raise NotImplementedError("Subclasses must implement get_client")
+    def add_member_to_board(self, board_id: str, member_id: str) -> bool:
+        """Add an existing member to the board. Returns True on success."""
+        raise NotImplementedError("Subclasses must implement add_member_to_board")

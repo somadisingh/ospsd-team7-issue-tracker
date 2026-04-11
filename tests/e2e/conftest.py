@@ -12,22 +12,32 @@ from issue_tracker_adapter.client import ServiceClientAdapter
 
 @pytest.fixture
 def e2e_credentials() -> dict[str, str]:
-    """Provide e2e test credentials from environment."""
+    """Provide e2e test credentials from environment.
+
+    Returns only the credentials needed for TrelloClient construction
+    (api_key, token). board_id is available via e2e_board_id fixture.
+    """
     return {
         "api_key": os.getenv("TRELLO_API_KEY", ""),
         "token": os.getenv("TRELLO_TOKEN", ""),
-        "board_id": os.getenv("TRELLO_BOARD_ID", ""),
     }
 
 
 @pytest.fixture
-def e2e_skip_if_no_credentials(e2e_credentials: dict[str, str]) -> None:
+def e2e_board_id() -> str:
+    """Provide a test board ID from environment."""
+    return os.getenv("TRELLO_BOARD_ID", "")
+
+
+@pytest.fixture
+def e2e_skip_if_no_credentials(
+    e2e_credentials: dict[str, str], e2e_board_id: str
+) -> None:
     """Skip e2e tests if Trello credentials are not available."""
     api_key = e2e_credentials.get("api_key")
     token = e2e_credentials.get("token")
-    board_id = e2e_credentials.get("board_id")
 
-    if not all([api_key, token, board_id]):
+    if not all([api_key, token, e2e_board_id]):
         pytest.skip(
             "Skipping e2e tests: TRELLO_API_KEY, TRELLO_TOKEN, and TRELLO_BOARD_ID required"
         )

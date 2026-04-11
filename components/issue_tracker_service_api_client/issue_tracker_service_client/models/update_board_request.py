@@ -1,56 +1,60 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-T = TypeVar("T", bound="BoardResponse")
+from ..types import UNSET, Unset
+
+T = TypeVar("T", bound="UpdateBoardRequest")
 
 
 @_attrs_define
-class BoardResponse:
+class UpdateBoardRequest:
     """
     Attributes:
-        id (str):
-        board_name (str):
+        name (None | str | Unset):
     """
 
-    id: str
-    board_name: str
+    name: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        id = self.id
-
-        board_name = self.board_name
+        name: None | str | Unset
+        if isinstance(self.name, Unset):
+            name = UNSET
+        else:
+            name = self.name
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update(
-            {
-                "id": id,
-                "board_name": board_name,
-            }
-        )
+        field_dict.update({})
+        if name is not UNSET:
+            field_dict["name"] = name
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        id = d.pop("id")
 
-        board_name = d.pop("board_name")
+        def _parse_name(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
 
-        board_response = cls(
-            id=id,
-            board_name=board_name,
+        name = _parse_name(d.pop("name", UNSET))
+
+        update_board_request = cls(
+            name=name,
         )
 
-        board_response.additional_properties = d
-        return board_response
+        update_board_request.additional_properties = d
+        return update_board_request
 
     @property
     def additional_keys(self) -> list[str]:

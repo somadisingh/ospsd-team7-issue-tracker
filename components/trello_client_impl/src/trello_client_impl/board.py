@@ -1,4 +1,4 @@
-"""Implementation of the Board contract."""
+"""Implementation of the Board contract for Trello boards."""
 
 from typing import TypedDict, TypeGuard
 
@@ -16,8 +16,8 @@ def _is_trello_board_response(obj: object) -> TypeGuard[_TrelloBoardResponse]:
     return isinstance(obj, dict) and "id" in obj and "name" in obj
 
 
-class TrelloBoard(Board):
-    """Concrete Board built for Board API response."""
+class TrelloBoard(Board):  # type: ignore[misc]
+    """Concrete Board built from a Trello board API response."""
 
     def __init__(
         self,
@@ -33,12 +33,12 @@ class TrelloBoard(Board):
         return self._id
 
     @property
-    def name(self) -> str:
+    def board_name(self) -> str:
         return self._name
 
     @classmethod
     def from_api(cls, board: _TrelloBoardResponse) -> "TrelloBoard":
-        """Build Board from API board object."""
+        """Build Board from Trello API board object."""
         return cls(
             id=board["id"],
             name=board.get("name", ""),

@@ -383,6 +383,9 @@ requires-dist = [
 name = "issue-tracker-client-api"
 version = "0.1.0"
 source = { editable = "components/issue_tracker_client_api" }
+dependencies = [
+    { name = "ospd-issue-tracker-api" },
+]
 
 [package.optional-dependencies]
 dev = [
@@ -393,6 +396,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?rev=tct297%2Fadd-uv" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.14.0" },
@@ -832,6 +836,11 @@ wheels = [
 ]
 
 [[package]]
+name = "ospd-issue-tracker-api"
+version = "0.1.0"
+source = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?rev=tct297%2Fadd-uv#5fde7fe514b7082ae28340c27a21fd7d22c42481" }
+
+[[package]]
 name = "ospsd-team-07"
 version = "0.1.0"
 source = { virtual = "." }
@@ -839,6 +848,7 @@ dependencies = [
     { name = "issue-tracker-adapter" },
     { name = "issue-tracker-service" },
     { name = "issue-tracker-service-client" },
+    { name = "ospd-issue-tracker-api" },
     { name = "requests-oauthlib" },
 ]
 
@@ -870,6 +880,7 @@ requires-dist = [
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9.6.0" },
     { name = "mkdocstrings-python", marker = "extra == 'dev'", specifier = ">=1.16.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.15.0" },
+    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?rev=tct297%2Fadd-uv" },
     { name = "pymdown-extensions", marker = "extra == 'dev'", specifier = ">=10.14.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },

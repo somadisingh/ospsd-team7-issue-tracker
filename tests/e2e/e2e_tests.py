@@ -52,24 +52,24 @@ class TestE2EClientOperations:
     """Test real client API operations.
 
     Note: These tests require a valid Trello board and issues to exist.
-    Adjust board_id and issue_id to match your test setup.
     """
 
     def test_get_board_from_api(
-        self, e2e_skip_if_no_credentials: None, e2e_credentials: dict[str, str]
+        self,
+        e2e_skip_if_no_credentials: None,
+        e2e_credentials: dict[str, str],
+        e2e_board_id: str,
     ) -> None:
         """Test getting a board from the actual Trello API."""
-        board_id = e2e_credentials["board_id"]
-
-        if not board_id:
+        if not e2e_board_id:
             pytest.skip("TRELLO_BOARD_ID not set")
 
         client = TrelloClient(**e2e_credentials)
 
         try:
-            board = client.get_board(board_id)
+            board = client.get_board(e2e_board_id)
             assert board is not None
-            assert board.id == board_id
+            assert board.id == e2e_board_id
         except Exception as e:
             pytest.skip(f"Could not reach Trello API: {e}")
 
@@ -86,18 +86,19 @@ class TestE2EClientOperations:
             pytest.skip(f"Could not reach Trello API: {e}")
 
     def test_get_issues_in_list_workflow(
-        self, e2e_skip_if_no_credentials: None, e2e_credentials: dict[str, str]
+        self,
+        e2e_skip_if_no_credentials: None,
+        e2e_credentials: dict[str, str],
+        e2e_board_id: str,
     ) -> None:
         """Test getting issues from a list on a board."""
-        board_id = e2e_credentials["board_id"]
-
-        if not board_id:
+        if not e2e_board_id:
             pytest.skip("TRELLO_BOARD_ID not set")
 
         client = TrelloClient(**e2e_credentials)
 
         try:
-            lists = list(client.get_lists(board_id))
+            lists = list(client.get_lists(e2e_board_id))
             if not lists:
                 pytest.skip("No lists on board")
             issues = client.get_issues_in_list(lists[0].id, max_issues=5)
@@ -150,11 +151,15 @@ class TestE2EInterfaceCompliance:
 
         required_methods = [
             "get_issue",
+            "get_issues",
             "delete_issue",
-            "update_status",
+            "update_issue",
             "get_board",
             "get_boards",
             "create_board",
+            "update_board",
+            "delete_board",
+            "create_issue",
             "add_member_to_board",
             "get_list",
             "get_lists",
@@ -164,7 +169,6 @@ class TestE2EInterfaceCompliance:
             "delete_list",
             "get_members_on_issue",
             "assign_issue",
-            "create_issue",
             "get_authorization_url",
             "exchange_request_token",
         ]
@@ -181,7 +185,7 @@ class TestE2EAuthenticationFailure:
     def test_invalid_token_handling(self) -> None:
         """Test that invalid token is handled during client initialization."""
         with pytest.raises(ValueError, match="api_key is required"):
-            TrelloClient(api_key="", token="", board_id="")
+            TrelloClient(api_key="", token="")
 
 
 @pytest.mark.e2e
@@ -192,18 +196,17 @@ class TestE2EAdapterGetBoard:
         self,
         e2e_skip_if_no_service_credentials: None,
         e2e_adapter: ServiceClientAdapter,
-        e2e_credentials: dict[str, str],
+        e2e_board_id: str,
     ) -> None:
-        """Test getting a board through the adapter → service → Trello path."""
-        board_id = e2e_credentials.get("board_id", "")
-        if not board_id:
+        """Test getting a board through the adapter -> service -> Trello path."""
+        if not e2e_board_id:
             pytest.skip("TRELLO_BOARD_ID not set")
 
         try:
-            board = e2e_adapter.get_board(board_id)
+            board = e2e_adapter.get_board(e2e_board_id)
             assert board is not None
-            assert board.id == board_id
-            assert board.name
+            assert board.id == e2e_board_id
+            assert board.board_name
         except Exception as e:
             pytest.skip(f"Could not reach deployed service: {e}")
 
@@ -217,13 +220,13 @@ class TestE2EAdapterListBoards:
         e2e_skip_if_no_service_credentials: None,
         e2e_adapter: ServiceClientAdapter,
     ) -> None:
-        """Test listing boards through the adapter → service → Trello path."""
+        """Test listing boards through the adapter -> service -> Trello path."""
         try:
             boards = list(e2e_adapter.get_boards())
             assert isinstance(boards, list)
             if boards:
                 assert boards[0].id
-                assert boards[0].name
+                assert boards[0].board_name
         except Exception as e:
             pytest.skip(f"Could not reach deployed service: {e}")
 
@@ -236,15 +239,14 @@ class TestE2EAdapterListOperations:
         self,
         e2e_skip_if_no_service_credentials: None,
         e2e_adapter: ServiceClientAdapter,
-        e2e_credentials: dict[str, str],
+        e2e_board_id: str,
     ) -> None:
         """Test getting lists on a board through the adapter."""
-        board_id = e2e_credentials.get("board_id", "")
-        if not board_id:
+        if not e2e_board_id:
             pytest.skip("TRELLO_BOARD_ID not set")
 
         try:
-            lists = list(e2e_adapter.get_lists(board_id))
+            lists = list(e2e_adapter.get_lists(e2e_board_id))
             assert isinstance(lists, list)
             if lists:
                 assert lists[0].id
@@ -261,15 +263,14 @@ class TestE2EAdapterIssueOperations:
         self,
         e2e_skip_if_no_service_credentials: None,
         e2e_adapter: ServiceClientAdapter,
-        e2e_credentials: dict[str, str],
+        e2e_board_id: str,
     ) -> None:
-        """Test getting issues from a list through the adapter → service → Trello path."""
-        board_id = e2e_credentials.get("board_id", "")
-        if not board_id:
+        """Test getting issues from a list through the adapter -> service -> Trello path."""
+        if not e2e_board_id:
             pytest.skip("TRELLO_BOARD_ID not set")
 
         try:
-            lists = list(e2e_adapter.get_lists(board_id))
+            lists = list(e2e_adapter.get_lists(e2e_board_id))
             if not lists:
                 pytest.skip("No lists on board")
             issues = list(e2e_adapter.get_issues_in_list(lists[0].id, max_issues=5))
@@ -293,11 +294,15 @@ class TestE2EAdapterInterfaceCompliance:
         """Verify the adapter exposes all required Client methods."""
         required_methods = [
             "get_issue",
+            "get_issues",
             "delete_issue",
-            "update_status",
+            "update_issue",
             "get_board",
             "get_boards",
             "create_board",
+            "update_board",
+            "delete_board",
+            "create_issue",
             "add_member_to_board",
             "get_list",
             "get_lists",
@@ -307,7 +312,6 @@ class TestE2EAdapterInterfaceCompliance:
             "delete_list",
             "get_members_on_issue",
             "assign_issue",
-            "create_issue",
             "get_authorization_url",
             "exchange_request_token",
         ]

@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import httpx
+from api.issue import Status
 from issue_tracker_service_client import errors as api_errors
 from issue_tracker_service_client.models.http_validation_error import (
     HTTPValidationError,
@@ -38,6 +39,9 @@ from issue_tracker_service_client.api.default import (
     create_list_lists_post as create_list_api,
 )
 from issue_tracker_service_client.api.default import (
+    delete_board_boards_board_id_delete as delete_board_api,
+)
+from issue_tracker_service_client.api.default import (
     delete_issue_issues_issue_id_delete as delete_issue_api,
 )
 from issue_tracker_service_client.api.default import (
@@ -53,7 +57,10 @@ from issue_tracker_service_client.api.default import (
     get_issue_members_issues_issue_id_members_get as get_members_api,
 )
 from issue_tracker_service_client.api.default import (
-    get_issues_in_list_lists_list_id_issues_get as get_issues_api,
+    get_issues_boards_board_id_issues_get as get_issues_api,
+)
+from issue_tracker_service_client.api.default import (
+    get_issues_in_list_lists_list_id_issues_get as get_issues_in_list_api,
 )
 from issue_tracker_service_client.api.default import (
     get_list_lists_list_id_get as get_list_api,
@@ -65,7 +72,10 @@ from issue_tracker_service_client.api.default import (
     list_boards_boards_get as list_boards_api,
 )
 from issue_tracker_service_client.api.default import (
-    update_issue_status_issues_issue_id_status_put as update_status_api,
+    update_board_boards_board_id_put as update_board_api,
+)
+from issue_tracker_service_client.api.default import (
+    update_issue_issues_issue_id_put as update_issue_api,
 )
 from issue_tracker_service_client.api.default import (
     update_list_lists_list_id_put as update_list_api,
@@ -88,11 +98,14 @@ from issue_tracker_service_client.models.create_list_request import CreateListRe
 from issue_tracker_service_client.models.issue_response import IssueResponse
 from issue_tracker_service_client.models.list_response import ListResponse
 from issue_tracker_service_client.models.member_response import MemberResponse
+from issue_tracker_service_client.models.update_board_request import (
+    UpdateBoardRequest,
+)
+from issue_tracker_service_client.models.update_issue_request import (
+    UpdateIssueRequest,
+)
 from issue_tracker_service_client.models.update_list_request import (
     UpdateListRequest,
-)
-from issue_tracker_service_client.models.update_status_request import (
-    UpdateStatusRequest,
 )
 
 from issue_tracker_adapter.board import ServiceBoard
@@ -112,10 +125,8 @@ class ServiceClientAdapter(Client):
         """Initialize the adapter.
 
         Args:
-            base_url: Base URL of the deployed service
-                (e.g. ``https://ospsd-team7-issue-tracker.onrender.com``).
-            session_token: Session token obtained from the ``/auth/callback``
-                endpoint after completing the OAuth flow.
+            base_url: Base URL of the deployed service.
+            session_token: Session token obtained via the OAuth callback.
 
         """
         self._session_token = session_token
@@ -150,13 +161,7 @@ class ServiceClientAdapter(Client):
             raise ValueError(f"Validation error from service: {msgs}")  # noqa: TRY004
 
     def _call_api(self, api_func: Callable[..., Any], **kwargs: Any) -> Any:  # noqa: ANN401
-        """Call a generated API function, translating HTTP errors.
-
-        Catches transport-level errors (timeouts, connection failures) and
-        unexpected HTTP status codes from the generated client and re-raises
-        them as standard Python exceptions.  Also detects 422 validation
-        error responses and raises ``ValueError``.
-        """
+        """Call a generated API function, translating HTTP errors."""
         try:
             result = api_func(
                 client=self._http_client,
@@ -176,9 +181,9 @@ class ServiceClientAdapter(Client):
         self._check_validation_error(result)
         return result
 
-    # ------------------------------------------------------------------
-    # Board operations
-    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------ #
+    # Board operations  (shared API)
+    # ------------------------------------------------------------------ #
 
     def get_board(self, board_id: str) -> Board:
         result = self._call_api(get_board_api.sync, board_id=board_id)
@@ -199,19 +204,95 @@ class ServiceClientAdapter(Client):
         )
         return ServiceBoard.from_response(self._ensure_board(result))
 
-    def add_member_to_board(self, board_id: str, member_id: str) -> bool:
+    def update_board(
+        self,
+        board_id: str,
+        name: str | None = None,
+    ) -> Board:
         result = self._call_api(
-            add_member_api.sync,
+            update_board_api.sync,
             board_id=board_id,
-            body=AddMemberToBoardRequest(member_id=member_id),
+            body=UpdateBoardRequest(name=name),
         )
+        return ServiceBoard.from_response(self._ensure_board(result))
+
+    def delete_board(self, board_id: str) -> bool:
+        result = self._call_api(delete_board_api.sync, board_id=board_id)
         if result is None:
             return False
         return bool(getattr(result, "additional_properties", {}).get("success", False))
 
-    # ------------------------------------------------------------------
-    # List operations
-    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------ #
+    # Issue operations  (shared API)
+    # ------------------------------------------------------------------ #
+
+    def get_issue(self, issue_id: str) -> Issue:
+        result = self._call_api(get_issue_api.sync, issue_id=issue_id)
+        return ServiceIssue.from_response(self._ensure_issue(result))
+
+    def get_issues(self, board_id: str) -> Iterator[Issue]:
+        result = self._call_api(get_issues_api.sync, board_id=board_id)
+        if not isinstance(result, list):
+            return
+        for issue_resp in result:
+            if isinstance(issue_resp, IssueResponse):
+                yield ServiceIssue.from_response(issue_resp)
+
+    def create_issue(
+        self,
+        title: str,
+        board_id: str,
+        desc: str | None = None,
+        members: list[str] | None = None,
+        due_date: str | None = None,
+        status: Status = Status.TO_DO,
+    ) -> Issue:
+        result = self._call_api(
+            create_issue_api.sync,
+            body=CreateIssueRequest(
+                title=title,
+                board_id=board_id,
+                desc=desc,
+                members=members,
+                due_date=due_date,
+                status=status.value,
+            ),
+        )
+        return ServiceIssue.from_response(self._ensure_issue(result))
+
+    def update_issue(
+        self,
+        issue_id: str,
+        title: str | None = None,
+        desc: str | None = None,
+        members: list[str] | None = None,
+        due_date: str | None = None,
+        status: Status | None = None,
+        board_id: str | None = None,
+    ) -> Issue:
+        result = self._call_api(
+            update_issue_api.sync,
+            issue_id=issue_id,
+            body=UpdateIssueRequest(
+                title=title,
+                desc=desc,
+                members=members,
+                due_date=due_date,
+                status=status.value if status else None,
+                board_id=board_id,
+            ),
+        )
+        return ServiceIssue.from_response(self._ensure_issue(result))
+
+    def delete_issue(self, issue_id: str) -> bool:
+        result = self._call_api(delete_issue_api.sync, issue_id=issue_id)
+        if result is None:
+            return False
+        return bool(getattr(result, "additional_properties", {}).get("success", False))
+
+    # ------------------------------------------------------------------ #
+    # Internal List operations
+    # ------------------------------------------------------------------ #
 
     def get_list(self, list_id: str) -> List:
         result = self._call_api(get_list_api.sync, list_id=list_id)
@@ -224,6 +305,22 @@ class ServiceClientAdapter(Client):
         for list_resp in result:
             if isinstance(list_resp, ListResponse):
                 yield ServiceList.from_response(list_resp)
+
+    def get_issues_in_list(
+        self,
+        list_id: str,
+        max_issues: int = 100,
+    ) -> Iterator[Issue]:
+        result = self._call_api(
+            get_issues_in_list_api.sync,
+            list_id=list_id,
+            max_issues=max_issues,
+        )
+        if not isinstance(result, list):
+            return
+        for issue_resp in result:
+            if isinstance(issue_resp, IssueResponse):
+                yield ServiceIssue.from_response(issue_resp)
 
     def create_list(self, board_id: str, name: str) -> List:
         result = self._call_api(
@@ -246,66 +343,19 @@ class ServiceClientAdapter(Client):
             return False
         return bool(getattr(result, "additional_properties", {}).get("success", False))
 
-    # ------------------------------------------------------------------
-    # Issue operations
-    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------ #
+    # Internal Member operations
+    # ------------------------------------------------------------------ #
 
-    def get_issue(self, issue_id: str) -> Issue:
-        result = self._call_api(get_issue_api.sync, issue_id=issue_id)
-        return ServiceIssue.from_response(self._ensure_issue(result))
-
-    def get_issues_in_list(
-        self,
-        list_id: str,
-        max_issues: int = 100,
-    ) -> Iterator[Issue]:
+    def add_member_to_board(self, board_id: str, member_id: str) -> bool:
         result = self._call_api(
-            get_issues_api.sync,
-            list_id=list_id,
-            max_issues=max_issues,
-        )
-        if not isinstance(result, list):
-            return
-        for issue_resp in result:
-            if isinstance(issue_resp, IssueResponse):
-                yield ServiceIssue.from_response(issue_resp)
-
-    def create_issue(
-        self,
-        title: str,
-        list_id: str,
-        *,
-        description: str | None = None,
-    ) -> Issue:
-        result = self._call_api(
-            create_issue_api.sync,
-            body=CreateIssueRequest(
-                title=title,
-                list_id=list_id,
-                description=description,
-            ),
-        )
-        return ServiceIssue.from_response(self._ensure_issue(result))
-
-    def update_status(self, issue_id: str, status: str) -> bool:
-        result = self._call_api(
-            update_status_api.sync,
-            issue_id=issue_id,
-            body=UpdateStatusRequest(status=status),
+            add_member_api.sync,
+            board_id=board_id,
+            body=AddMemberToBoardRequest(member_id=member_id),
         )
         if result is None:
             return False
         return bool(getattr(result, "additional_properties", {}).get("success", False))
-
-    def delete_issue(self, issue_id: str) -> bool:
-        result = self._call_api(delete_issue_api.sync, issue_id=issue_id)
-        if result is None:
-            return False
-        return bool(getattr(result, "additional_properties", {}).get("success", False))
-
-    # ------------------------------------------------------------------
-    # Member operations
-    # ------------------------------------------------------------------
 
     def get_members_on_issue(self, issue_id: str) -> list[Member]:
         result = self._call_api(get_members_api.sync, issue_id=issue_id)
@@ -327,9 +377,9 @@ class ServiceClientAdapter(Client):
             return False
         return bool(getattr(result, "additional_properties", {}).get("success", False))
 
-    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------ #
     # OAuth — handled by the service, not the adapter
-    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------ #
 
     def get_authorization_url(self, callback_url: str | None = None) -> str:
         raise NotImplementedError(
@@ -380,9 +430,5 @@ def get_client_impl(**kwargs: Any) -> Client:  # noqa: ANN401
 
 
 def register() -> None:
-    """Register the service adapter with the issue tracker client API.
-
-    After calling this, ``issue_tracker_client_api.get_client(...)`` will
-    return a ``ServiceClientAdapter`` that talks to the deployed service.
-    """
+    """Register the service adapter with the issue tracker client API."""
     issue_tracker_client_api.get_client = get_client_impl  # type: ignore[assignment]

@@ -1,10 +1,12 @@
 """Adapter implementation of the Issue contract."""
 
+from api.issue import Status
 from issue_tracker_client_api.issue import Issue
 from issue_tracker_service_client.models.issue_response import IssueResponse
+from issue_tracker_service_client.types import Unset
 
 
-class ServiceIssue(Issue):
+class ServiceIssue(Issue):  # type: ignore[misc]
     """Issue backed by a service IssueResponse."""
 
     def __init__(
@@ -12,14 +14,18 @@ class ServiceIssue(Issue):
         *,
         id: str,
         title: str,
-        is_complete: bool,
-        list_id: str,
-        board_id: str | None,
+        desc: str,
+        members: list[str] | None,
+        due_date: str | None,
+        status: Status,
+        board_id: str,
     ) -> None:
         self._id = id
         self._title = title
-        self._is_complete = is_complete
-        self._list_id = list_id
+        self._desc = desc
+        self._members = members
+        self._due_date = due_date
+        self._status = status
         self._board_id = board_id
 
     @property
@@ -31,24 +37,36 @@ class ServiceIssue(Issue):
         return self._title
 
     @property
-    def is_complete(self) -> bool:
-        return self._is_complete
+    def desc(self) -> str:
+        return self._desc
 
     @property
-    def list_id(self) -> str:
-        return self._list_id
+    def members(self) -> list[str] | None:
+        return self._members
 
     @property
-    def board_id(self) -> str | None:
+    def due_date(self) -> str | None:
+        return self._due_date
+
+    @property
+    def status(self) -> Status:
+        return self._status
+
+    @property
+    def board_id(self) -> str:
         return self._board_id
 
     @classmethod
     def from_response(cls, resp: IssueResponse) -> "ServiceIssue":
         """Build from the auto-generated IssueResponse."""
+        members = resp.members if not isinstance(resp.members, Unset) else None
+        due_date = resp.due_date if not isinstance(resp.due_date, Unset) else None
         return cls(
             id=resp.id,
             title=resp.title,
-            is_complete=resp.is_complete,
-            list_id=resp.list_id,
+            desc=resp.desc,
+            members=members,
+            due_date=due_date,
+            status=Status(resp.status),
             board_id=resp.board_id,
         )

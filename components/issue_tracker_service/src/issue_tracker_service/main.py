@@ -1,9 +1,16 @@
+"""FastAPI service exposing the shared issue-tracker API over HTTP.
+
+Implements the vertical's shared Board/Issue contract plus
+internal List and Member endpoints.
+"""
+
 from __future__ import annotations
 
 import logging
 from typing import Dict, List, Optional
 
 import issue_tracker_client_api
+from api.issue import Status
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from issue_tracker_client_api.exceptions import (
@@ -15,19 +22,24 @@ from issue_tracker_client_api.exceptions import (
 from pydantic import BaseModel
 
 from trello_client_impl.client import TrelloClient
+
+from .routes.auth import _trello_config
+from .routes.auth import router as auth_router
 from .routes.health import router as health_router
-from .routes.auth import _trello_config, router as auth_router
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Issue Tracker Service", version="0.1.0")
+app = FastAPI(title="Issue Tracker Service", version="0.2.0")
 
-# Include routers
 app.include_router(health_router)
 app.include_router(auth_router)
 
-# In-memory state (mini-demo). Replace with per-user DB for production.
 user_sessions: Dict[str, Dict[str, str]] = {}
+
+
+# ------------------------------------------------------------------ #
+# Exception handlers
+# ------------------------------------------------------------------ #
 
 
 @app.exception_handler(ResourceNotFoundError)
@@ -57,48 +69,30 @@ async def _issue_tracker_error_handler(request: Request, exc: IssueTrackerError)
     )
 
 
-def _board_to_response(board: issue_tracker_client_api.Board) -> BoardResponse:
-    return BoardResponse(id=board.id, name=board.name)
-
-
-def _list_to_response(list_obj: issue_tracker_client_api.List) -> ListResponse:
-    return ListResponse(id=list_obj.id, name=list_obj.name, board_id=list_obj.board_id or "")
-
-
-def _issue_to_response(issue: issue_tracker_client_api.Issue) -> IssueResponse:
-    return IssueResponse(
-        id=issue.id,
-        title=issue.title,
-        list_id=issue.list_id,
-        board_id=issue.board_id or "",
-        is_complete=issue.is_complete,
-    )
-
-
-def _member_to_response(member: issue_tracker_client_api.Member) -> MemberResponse:
-    return MemberResponse(
-        id=member.id,
-        username=member.username or "",
-    )
+# ------------------------------------------------------------------ #
+# Response / request models
+# ------------------------------------------------------------------ #
 
 
 class BoardResponse(BaseModel):
     id: str
-    name: str
+    board_name: str
+
+
+class IssueResponse(BaseModel):
+    id: str
+    title: str
+    desc: str
+    members: Optional[List[str]] = None
+    due_date: Optional[str] = None
+    status: str
+    board_id: str
 
 
 class ListResponse(BaseModel):
     id: str
     name: str
     board_id: str
-
-
-class IssueResponse(BaseModel):
-    id: str
-    title: str
-    list_id: str
-    board_id: str
-    is_complete: bool
 
 
 class MemberResponse(BaseModel):
@@ -108,6 +102,28 @@ class MemberResponse(BaseModel):
 
 class CreateBoardRequest(BaseModel):
     name: str
+
+
+class UpdateBoardRequest(BaseModel):
+    name: Optional[str] = None
+
+
+class CreateIssueRequest(BaseModel):
+    title: str
+    board_id: str
+    desc: Optional[str] = None
+    members: Optional[List[str]] = None
+    due_date: Optional[str] = None
+    status: str = Status.TO_DO.value
+
+
+class UpdateIssueRequest(BaseModel):
+    title: Optional[str] = None
+    desc: Optional[str] = None
+    members: Optional[List[str]] = None
+    due_date: Optional[str] = None
+    status: Optional[str] = None
+    board_id: Optional[str] = None
 
 
 class CreateListRequest(BaseModel):
@@ -123,18 +139,45 @@ class AddMemberToBoardRequest(BaseModel):
     member_id: str
 
 
-class CreateIssueRequest(BaseModel):
-    title: str
-    list_id: str
-    description: Optional[str] = None
-
-
-class UpdateStatusRequest(BaseModel):
-    status: str
-
-
 class AssignIssueRequest(BaseModel):
     member_id: str
+
+
+# ------------------------------------------------------------------ #
+# Converters
+# ------------------------------------------------------------------ #
+
+
+def _board_to_response(board: issue_tracker_client_api.Board) -> BoardResponse:
+    return BoardResponse(id=board.id, board_name=board.board_name)
+
+
+def _issue_to_response(issue: issue_tracker_client_api.Issue) -> IssueResponse:
+    return IssueResponse(
+        id=issue.id,
+        title=issue.title,
+        desc=issue.desc,
+        members=issue.members,
+        due_date=issue.due_date,
+        status=issue.status.value,
+        board_id=issue.board_id,
+    )
+
+
+def _list_to_response(list_obj: issue_tracker_client_api.List) -> ListResponse:
+    return ListResponse(id=list_obj.id, name=list_obj.name, board_id=list_obj.board_id or "")
+
+
+def _member_to_response(member: issue_tracker_client_api.Member) -> MemberResponse:
+    return MemberResponse(
+        id=member.id,
+        username=member.username or "",
+    )
+
+
+# ------------------------------------------------------------------ #
+# Auth dependency
+# ------------------------------------------------------------------ #
 
 
 def get_authenticated_client(x_session_token: str = Header(..., alias="X-Session-Token")) -> TrelloClient:
@@ -151,6 +194,11 @@ def get_authenticated_client(x_session_token: str = Header(..., alias="X-Session
     )
 
 
+# ------------------------------------------------------------------ #
+# Board endpoints  (shared API)
+# ------------------------------------------------------------------ #
+
+
 @app.get("/boards", response_model=List[BoardResponse])
 async def list_boards(client: TrelloClient = Depends(get_authenticated_client)) -> list[BoardResponse]:
     return [_board_to_response(board) for board in client.get_boards()]
@@ -158,26 +206,90 @@ async def list_boards(client: TrelloClient = Depends(get_authenticated_client)) 
 
 @app.get("/boards/{board_id}", response_model=BoardResponse)
 async def get_board(board_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> BoardResponse:
-    board = client.get_board(board_id)
-    return _board_to_response(board)
+    return _board_to_response(client.get_board(board_id))
 
 
 @app.post("/boards", response_model=BoardResponse)
 async def create_board(
     req: CreateBoardRequest, client: TrelloClient = Depends(get_authenticated_client)
 ) -> BoardResponse:
-    board = client.create_board(name=req.name)
-    return _board_to_response(board)
+    return _board_to_response(client.create_board(name=req.name))
 
 
-@app.post("/boards/{board_id}/members", response_model=Dict[str, bool])
-async def add_member_to_board(
+@app.put("/boards/{board_id}", response_model=BoardResponse)
+async def update_board(
     board_id: str,
-    body: AddMemberToBoardRequest,
+    body: UpdateBoardRequest,
     client: TrelloClient = Depends(get_authenticated_client),
-) -> Dict[str, bool]:
-    success = client.add_member_to_board(board_id=board_id, member_id=body.member_id)
-    return {"success": success}
+) -> BoardResponse:
+    return _board_to_response(client.update_board(board_id=board_id, name=body.name))
+
+
+@app.delete("/boards/{board_id}", response_model=Dict[str, bool])
+async def delete_board(board_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> Dict[str, bool]:
+    return {"success": client.delete_board(board_id)}
+
+
+# ------------------------------------------------------------------ #
+# Issue endpoints  (shared API)
+# ------------------------------------------------------------------ #
+
+
+@app.get("/boards/{board_id}/issues", response_model=List[IssueResponse])
+async def get_issues(board_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> list[IssueResponse]:
+    return [_issue_to_response(issue) for issue in client.get_issues(board_id)]
+
+
+@app.get("/issues/{issue_id}", response_model=IssueResponse)
+async def get_issue(issue_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> IssueResponse:
+    return _issue_to_response(client.get_issue(issue_id))
+
+
+@app.post("/issues", response_model=IssueResponse)
+async def create_issue(
+    req: CreateIssueRequest, client: TrelloClient = Depends(get_authenticated_client)
+) -> IssueResponse:
+    status = Status(req.status)
+    return _issue_to_response(
+        client.create_issue(
+            title=req.title,
+            board_id=req.board_id,
+            desc=req.desc,
+            members=req.members,
+            due_date=req.due_date,
+            status=status,
+        )
+    )
+
+
+@app.put("/issues/{issue_id}", response_model=IssueResponse)
+async def update_issue(
+    issue_id: str,
+    body: UpdateIssueRequest,
+    client: TrelloClient = Depends(get_authenticated_client),
+) -> IssueResponse:
+    status = Status(body.status) if body.status is not None else None
+    return _issue_to_response(
+        client.update_issue(
+            issue_id=issue_id,
+            title=body.title,
+            desc=body.desc,
+            members=body.members,
+            due_date=body.due_date,
+            status=status,
+            board_id=body.board_id,
+        )
+    )
+
+
+@app.delete("/issues/{issue_id}", response_model=Dict[str, bool])
+async def delete_issue(issue_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> Dict[str, bool]:
+    return {"success": client.delete_issue(issue_id)}
+
+
+# ------------------------------------------------------------------ #
+# Internal List endpoints
+# ------------------------------------------------------------------ #
 
 
 @app.get("/boards/{board_id}/lists", response_model=List[ListResponse])
@@ -187,14 +299,12 @@ async def get_lists(board_id: str, client: TrelloClient = Depends(get_authentica
 
 @app.get("/lists/{list_id}", response_model=ListResponse)
 async def get_list(list_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> ListResponse:
-    lst = client.get_list(list_id)
-    return _list_to_response(lst)
+    return _list_to_response(client.get_list(list_id))
 
 
 @app.post("/lists", response_model=ListResponse)
 async def create_list(req: CreateListRequest, client: TrelloClient = Depends(get_authenticated_client)) -> ListResponse:
-    lst = client.create_list(board_id=req.board_id, name=req.name)
-    return _list_to_response(lst)
+    return _list_to_response(client.create_list(board_id=req.board_id, name=req.name))
 
 
 @app.put("/lists/{list_id}", response_model=ListResponse)
@@ -203,14 +313,12 @@ async def update_list(
     body: UpdateListRequest,
     client: TrelloClient = Depends(get_authenticated_client),
 ) -> ListResponse:
-    lst = client.update_list(list_id=list_id, name=body.name)
-    return _list_to_response(lst)
+    return _list_to_response(client.update_list(list_id=list_id, name=body.name))
 
 
 @app.delete("/lists/{list_id}", response_model=Dict[str, bool])
 async def delete_list(list_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> Dict[str, bool]:
-    result = client.delete_list(list_id)
-    return {"success": result}
+    return {"success": client.delete_list(list_id)}
 
 
 @app.get("/lists/{list_id}/issues", response_model=List[IssueResponse])
@@ -222,47 +330,29 @@ async def get_issues_in_list(
     return [_issue_to_response(issue) for issue in client.get_issues_in_list(list_id=list_id, max_issues=max_issues)]
 
 
-@app.get("/issues/{issue_id}", response_model=IssueResponse)
-async def get_issue(issue_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> IssueResponse:
-    issue = client.get_issue(issue_id)
-    return _issue_to_response(issue)
+# ------------------------------------------------------------------ #
+# Internal Member endpoints
+# ------------------------------------------------------------------ #
 
 
-@app.post("/issues", response_model=IssueResponse)
-async def create_issue(
-    req: CreateIssueRequest, client: TrelloClient = Depends(get_authenticated_client)
-) -> IssueResponse:
-    issue = client.create_issue(title=req.title, list_id=req.list_id, description=req.description)
-    return _issue_to_response(issue)
-
-
-@app.put("/issues/{issue_id}/status", response_model=Dict[str, bool])
-async def update_issue_status(
-    issue_id: str,
-    body: UpdateStatusRequest,
+@app.post("/boards/{board_id}/members", response_model=Dict[str, bool])
+async def add_member_to_board(
+    board_id: str,
+    body: AddMemberToBoardRequest,
     client: TrelloClient = Depends(get_authenticated_client),
 ) -> Dict[str, bool]:
-    success = client.update_status(issue_id=issue_id, status=body.status)
-    return {"success": success}
-
-
-@app.delete("/issues/{issue_id}", response_model=Dict[str, bool])
-async def delete_issue(issue_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> Dict[str, bool]:
-    result = client.delete_issue(issue_id)
-    return {"success": result}
+    return {"success": client.add_member_to_board(board_id=board_id, member_id=body.member_id)}
 
 
 @app.get("/issues/{issue_id}/members", response_model=List[MemberResponse])
 async def get_issue_members(
     issue_id: str, client: TrelloClient = Depends(get_authenticated_client)
 ) -> list[MemberResponse]:
-    members = client.get_members_on_issue(issue_id)
-    return [_member_to_response(m) for m in members]
+    return [_member_to_response(m) for m in client.get_members_on_issue(issue_id)]
 
 
 @app.post("/issues/{issue_id}/assign", response_model=Dict[str, bool])
 async def assign_issue(
     issue_id: str, body: AssignIssueRequest, client: TrelloClient = Depends(get_authenticated_client)
 ) -> Dict[str, bool]:
-    success = client.assign_issue(issue_id=issue_id, member_id=body.member_id)
-    return {"success": success}
+    return {"success": client.assign_issue(issue_id=issue_id, member_id=body.member_id)}

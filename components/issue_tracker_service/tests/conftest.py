@@ -1,8 +1,10 @@
 """Conftest for issue_tracker_service tests."""
 
+from collections.abc import Generator
 from unittest.mock import MagicMock
 
 import pytest
+from api.issue import Status
 from fastapi.testclient import TestClient
 from issue_tracker_service.main import app, get_authenticated_client
 
@@ -14,7 +16,7 @@ def mock_trello_client() -> MagicMock:
 
 
 @pytest.fixture
-def test_client(mock_trello_client: MagicMock) -> TestClient:
+def test_client(mock_trello_client: MagicMock) -> Generator[TestClient]:
     """Provide a FastAPI TestClient with auth dependency overridden."""
     app.dependency_overrides[get_authenticated_client] = lambda: mock_trello_client
     client = TestClient(app)
@@ -27,7 +29,7 @@ def mock_board() -> MagicMock:
     """Provide a mock Board domain object."""
     board = MagicMock()
     board.id = "board_123"
-    board.name = "Test Board"
+    board.board_name = "Test Board"
     return board
 
 
@@ -47,9 +49,11 @@ def mock_issue() -> MagicMock:
     issue = MagicMock()
     issue.id = "issue_789"
     issue.title = "Fix bug"
-    issue.list_id = "list_456"
+    issue.desc = "A bug description"
+    issue.members = None
+    issue.due_date = None
+    issue.status = Status.TO_DO
     issue.board_id = "board_123"
-    issue.is_complete = False
     return issue
 
 

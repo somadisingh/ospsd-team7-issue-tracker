@@ -8,33 +8,35 @@ from attrs import field as _attrs_field
 
 from ..types import UNSET, Unset
 
-T = TypeVar("T", bound="CreateIssueRequest")
+T = TypeVar("T", bound="UpdateIssueRequest")
 
 
 @_attrs_define
-class CreateIssueRequest:
+class UpdateIssueRequest:
     """
     Attributes:
-        title (str):
-        board_id (str):
+        title (None | str | Unset):
         desc (None | str | Unset):
         members (list[str] | None | Unset):
         due_date (None | str | Unset):
-        status (str | Unset):  Default: 'to_do'.
+        status (None | str | Unset):
+        board_id (None | str | Unset):
     """
 
-    title: str
-    board_id: str
+    title: None | str | Unset = UNSET
     desc: None | str | Unset = UNSET
     members: list[str] | None | Unset = UNSET
     due_date: None | str | Unset = UNSET
-    status: str | Unset = "to_do"
+    status: None | str | Unset = UNSET
+    board_id: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        title = self.title
-
-        board_id = self.board_id
+        title: None | str | Unset
+        if isinstance(self.title, Unset):
+            title = UNSET
+        else:
+            title = self.title
 
         desc: None | str | Unset
         if isinstance(self.desc, Unset):
@@ -57,16 +59,23 @@ class CreateIssueRequest:
         else:
             due_date = self.due_date
 
-        status = self.status
+        status: None | str | Unset
+        if isinstance(self.status, Unset):
+            status = UNSET
+        else:
+            status = self.status
+
+        board_id: None | str | Unset
+        if isinstance(self.board_id, Unset):
+            board_id = UNSET
+        else:
+            board_id = self.board_id
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
-        field_dict.update(
-            {
-                "title": title,
-                "board_id": board_id,
-            }
-        )
+        field_dict.update({})
+        if title is not UNSET:
+            field_dict["title"] = title
         if desc is not UNSET:
             field_dict["desc"] = desc
         if members is not UNSET:
@@ -75,15 +84,23 @@ class CreateIssueRequest:
             field_dict["due_date"] = due_date
         if status is not UNSET:
             field_dict["status"] = status
+        if board_id is not UNSET:
+            field_dict["board_id"] = board_id
 
         return field_dict
 
     @classmethod
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
-        title = d.pop("title")
 
-        board_id = d.pop("board_id")
+        def _parse_title(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        title = _parse_title(d.pop("title", UNSET))
 
         def _parse_desc(data: object) -> None | str | Unset:
             if data is None:
@@ -120,19 +137,35 @@ class CreateIssueRequest:
 
         due_date = _parse_due_date(d.pop("due_date", UNSET))
 
-        status = d.pop("status", UNSET)
+        def _parse_status(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
 
-        create_issue_request = cls(
+        status = _parse_status(d.pop("status", UNSET))
+
+        def _parse_board_id(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        board_id = _parse_board_id(d.pop("board_id", UNSET))
+
+        update_issue_request = cls(
             title=title,
-            board_id=board_id,
             desc=desc,
             members=members,
             due_date=due_date,
             status=status,
+            board_id=board_id,
         )
 
-        create_issue_request.additional_properties = d
-        return create_issue_request
+        update_issue_request.additional_properties = d
+        return update_issue_request
 
     @property
     def additional_keys(self) -> list[str]:

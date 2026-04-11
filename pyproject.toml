@@ -9,12 +9,14 @@ dependencies = [
     "issue-tracker-service",
     "issue-tracker-adapter",
     "issue-tracker-service-client",
+    "ospd-issue-tracker-api",
 ]
 
 [tool.uv.sources]
 issue-tracker-service = { workspace = true }
 issue-tracker-adapter = { workspace = true }
 issue-tracker-service-client = { workspace = true }
+ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git", rev = "tct297/add-uv" }
 
 [project.optional-dependencies]
 dev = [
@@ -75,6 +77,7 @@ ignore = [
   "F841",    # Unused variable — intentional in try/except tests
   "INP001",  # Missing __init__.py — test dirs must not have it
   "PLC0415", # Import not at top of file — tests may import inside functions for isolation
+  "PLR0913", # Too many arguments — test concrete classes implement interfaces with many params
 ]
 # Trello implementation: similar to tests, but stricter for production code
 "components/trello_client_impl/src/**/*.py" = [
@@ -107,6 +110,19 @@ mypy_path = ["components/issue_tracker_client_api/src", "components/trello_clien
 ignore_missing_imports = false
 warn_unused_ignores = false
 show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = "api.*"
+ignore_missing_imports = true
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = "requests_oauthlib.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "requests.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 pythonpath = [

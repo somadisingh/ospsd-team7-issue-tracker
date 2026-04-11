@@ -13,6 +13,9 @@ from .board_response import BoardResponse
 from .create_board_request import CreateBoardRequest
 from .create_issue_request import CreateIssueRequest
 from .create_list_request import CreateListRequest
+from .delete_board_boards_board_id_delete_response_delete_board_boards_board_id_delete import (
+    DeleteBoardBoardsBoardIdDeleteResponseDeleteBoardBoardsBoardIdDelete,
+)
 from .delete_issue_issues_issue_id_delete_response_delete_issue_issues_issue_id_delete import (
     DeleteIssueIssuesIssueIdDeleteResponseDeleteIssueIssuesIssueIdDelete,
 )
@@ -24,6 +27,8 @@ from .http_validation_error import HTTPValidationError
 from .issue_response import IssueResponse
 from .list_response import ListResponse
 from .member_response import MemberResponse
+from .update_board_request import UpdateBoardRequest
+from .update_issue_request import UpdateIssueRequest
 from .update_issue_status_issues_issue_id_status_put_response_update_issue_status_issues_issue_id_status_put import (
     UpdateIssueStatusIssuesIssueIdStatusPutResponseUpdateIssueStatusIssuesIssueIdStatusPut,
 )
@@ -42,6 +47,7 @@ __all__ = (
     "CreateBoardRequest",
     "CreateIssueRequest",
     "CreateListRequest",
+    "DeleteBoardBoardsBoardIdDeleteResponseDeleteBoardBoardsBoardIdDelete",
     "DeleteIssueIssuesIssueIdDeleteResponseDeleteIssueIssuesIssueIdDelete",
     "DeleteListListsListIdDeleteResponseDeleteListListsListIdDelete",
     "HealthHealthGetResponseHealthHealthGet",
@@ -49,6 +55,8 @@ __all__ = (
     "IssueResponse",
     "ListResponse",
     "MemberResponse",
+    "UpdateBoardRequest",
+    "UpdateIssueRequest",
     "UpdateIssueStatusIssuesIssueIdStatusPutResponseUpdateIssueStatusIssuesIssueIdStatusPut",
     "UpdateListRequest",
     "UpdateStatusRequest",
