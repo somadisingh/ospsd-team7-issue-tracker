@@ -57,7 +57,9 @@ class LocalChatClient(ChatClient):
             pass
 
         channel_messages = [
-            message for message in self._messages.values() if message.channel == channel_id
+            message
+            for message in self._messages.values()
+            if message.channel == channel_id
         ]
         channel_messages.sort(key=lambda message: message.timestamp, reverse=True)
         return channel_messages[:limit]

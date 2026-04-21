@@ -48,7 +48,10 @@ def test_get_messages_returns_recent_messages_in_order() -> None:
     second_message = client.send_message("random", "second")
 
     messages = client.get_messages("random", limit=2)
-    assert [message.message_id for message in messages] == [second_message.message_id, first_message.message_id]
+    assert [message.message_id for message in messages] == [
+        second_message.message_id,
+        first_message.message_id,
+    ]
 
 
 def test_delete_message_removes_message_and_raises_afterwards() -> None:
