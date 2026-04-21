@@ -1,3 +1,5 @@
+import pytest
+
 from chat_client_api import (
     ChannelNotFoundError,
     MessageDeleteError,
@@ -5,8 +7,6 @@ from chat_client_api import (
     get_client,
     register_client,
 )
-
-import pytest
 
 from chat_client_impl import get_client_impl
 

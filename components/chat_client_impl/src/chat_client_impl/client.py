@@ -43,6 +43,7 @@ class LocalChatClient(ChatClient):
 
     def get_channel(self, channel_id: str) -> Channel:
         """Look up a channel by ID. Not supported in this local implementation."""
+        del channel_id
         raise ChannelNotFoundError
 
     def get_messages(
