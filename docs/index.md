@@ -11,6 +11,7 @@ This project provides:
 - **`issue_tracker_service`** — FastAPI service that wraps the Trello client and exposes it over HTTP with OAuth 1.0a
 - **`issue_tracker_service_api_client`** — Auto-generated Python client from the service's OpenAPI spec (via `openapi-python-client`)
 - **`issue_tracker_adapter`** — Service client adapter that implements the `Client` ABC by delegating to the auto-generated HTTP client
+- **`chat_client_impl`** — Local in-memory chat client implementation that uses the shared `chat-client-api` contract from GitHub
 
 The design supports dependency injection: implementations register at import time, and consumers use a single factory (`get_client`) to obtain the configured client — whether it talks to Trello directly or through the deployed service.
 
@@ -57,7 +58,8 @@ ospsd-team-07/
 │   ├── trello_client_impl/               # Direct Trello implementation
 │   ├── issue_tracker_service/             # FastAPI service (OAuth + REST endpoints)
 │   ├── issue_tracker_service_api_client/  # Auto-generated HTTP client (openapi-python-client)
-│   └── issue_tracker_adapter/             # Service client adapter (Client ABC → HTTP client)
+│   ├── issue_tracker_adapter/             # Service client adapter (Client ABC → HTTP client)
+│   └── chat_client_impl/                 # Local chat client implementation
 ├── tests/
 │   ├── integration/                       # DI and interface compliance
 │   └── e2e/                               # Full workflow with real API
@@ -74,5 +76,6 @@ ospsd-team-07/
 | [Trello Client Implementation](api/trello_client_impl.md) | Trello implementation reference |
 | [FastAPI Service](api/issue_tracker_service.md) | REST API endpoints and auth flow |
 | [Service Client Adapter](api/issue_tracker_adapter.md) | Adapter component reference |
+| [Chat Client API](api/chat_client_api.md) | Shared chat contract and local implementation |
 | [Code Quality](code-quality.md) | Ruff, mypy, and linting guidelines |
 | [CI/CD](ci-cd.md) | CircleCI pipeline and local parity |

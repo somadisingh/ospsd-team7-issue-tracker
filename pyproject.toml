@@ -10,6 +10,8 @@ dependencies = [
     "issue-tracker-adapter",
     "issue-tracker-service-client",
     "ospd-issue-tracker-api",
+    "chat-client-api",
+    "chat-client-impl",
 ]
 
 [tool.uv.sources]
@@ -17,6 +19,8 @@ issue-tracker-service = { workspace = true }
 issue-tracker-adapter = { workspace = true }
 issue-tracker-service-client = { workspace = true }
 ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git", rev = "tct297/add-uv" }
+chat-client-impl = { workspace = true }
+chat-client-api = { git = "https://github.com/HarshithKoriRaj/Shared-API.git", rev = "main" }
 
 [project.optional-dependencies]
 dev = [
@@ -131,6 +135,7 @@ pythonpath = [
     "components/trello_client_impl/src",
     "components/issue_tracker_adapter/src",
     "components/issue_tracker_service/src",
+    "components/chat_client_impl/src",
     "components/issue_tracker_service_api_client",
 ]
 testpaths = ["tests", "components/*/tests"]
