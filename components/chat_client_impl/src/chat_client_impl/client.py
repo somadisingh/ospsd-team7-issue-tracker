@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from chat_client_api import (
     Channel,
@@ -18,13 +18,12 @@ class LocalChatClient(ChatClient):
     """A simple chat client that keeps messages in memory."""
 
     def __init__(self) -> None:
-        # Store messages by their opaque message ID.
+        """Initialize an empty local message store."""
         self._messages: dict[str, Message] = {}
 
     def send_message(self, channel_id: str, text: str) -> Message:
-        # Send a message to a channel identifier and return the saved Message object.
-        # This local implementation does not validate that the channel exists first.
-        now = datetime.now(timezone.utc)
+        """Send a message to the provided channel ID and store it in memory."""
+        now = datetime.now(datetime.UTC)
         message_id = f"{channel_id}:{now.isoformat()}"
 
         message = Message(
@@ -39,12 +38,12 @@ class LocalChatClient(ChatClient):
         return message
 
     def get_channels(self) -> list[Channel]:
-        # This local implementation does not track channel objects.
+        """Return the list of channels tracked by this client."""
         return []
 
     def get_channel(self, channel_id: str) -> Channel:
-        # Channel lookup is not supported by this local implementation.
-        raise ChannelNotFoundError(f"Channel not found: {channel_id}")
+        """Look up a channel by ID. Not supported in this local implementation."""
+        raise ChannelNotFoundError
 
     def get_messages(
         self,
@@ -52,8 +51,10 @@ class LocalChatClient(ChatClient):
         limit: int = 10,
         cursor: str | None = None,
     ) -> list[Message]:
-        # Cursor support is optional in the shared contract, and this local
-        # storage implementation keeps it simple by ignoring pagination.
+        """Return recent messages for the requested channel ID."""
+        if cursor is not None:
+            pass
+
         channel_messages = [
             message for message in self._messages.values() if message.channel == channel_id
         ]
@@ -61,15 +62,15 @@ class LocalChatClient(ChatClient):
         return channel_messages[:limit]
 
     def get_message(self, message_id: str) -> Message:
-        # Return a previously sent message by its opaque ID.
+        """Return a previously sent message by its opaque ID."""
         if message_id not in self._messages:
-            raise MessageNotFoundError(f"Message not found: {message_id}")
+            raise MessageNotFoundError
         return self._messages[message_id]
 
     def delete_message(self, message_id: str) -> None:
-        # Delete a message from the local store. If it is missing, raise an error.
+        """Remove a stored message by its opaque ID."""
         if message_id not in self._messages:
-            raise MessageDeleteError(f"Cannot delete message: {message_id}")
+            raise MessageDeleteError
         del self._messages[message_id]
 
 
