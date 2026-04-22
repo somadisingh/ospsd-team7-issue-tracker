@@ -13,9 +13,7 @@ def get_session_credentials(
     session_token: str,
 ) -> dict[str, str] | None:
     """Load ``access_token`` and ``access_token_secret`` for a valid session, or None."""
-    row = db.scalars(
-        select(UserSessionModel).where(UserSessionModel.session_token == session_token)
-    ).first()
+    row = db.scalars(select(UserSessionModel).where(UserSessionModel.session_token == session_token)).first()
     if row is None:
         return None
     return {

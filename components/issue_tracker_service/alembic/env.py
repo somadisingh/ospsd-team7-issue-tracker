@@ -1,4 +1,5 @@
 """Alembic environment: run migrations with ``DATABASE_URL`` in the environment."""
+
 from __future__ import annotations
 
 from issue_tracker_service.db.base import Base

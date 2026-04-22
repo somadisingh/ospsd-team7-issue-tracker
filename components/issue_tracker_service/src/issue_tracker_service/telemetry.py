@@ -87,10 +87,7 @@ def setup_telemetry(app: FastAPI) -> None:
     if getattr(app.state, "otel_instrumented", False):
         return
 
-    service_name = (
-        os.environ.get("OTEL_SERVICE_NAME", "issue-tracker-service").strip()
-        or "issue-tracker-service"
-    )
+    service_name = os.environ.get("OTEL_SERVICE_NAME", "issue-tracker-service").strip() or "issue-tracker-service"
     headers = _parse_headers(os.environ.get("OTEL_EXPORTER_OTLP_HEADERS"))
     resource = Resource.create({"service.name": service_name})
 
@@ -102,9 +99,7 @@ def setup_telemetry(app: FastAPI) -> None:
         )
         trace.set_tracer_provider(t_provider)
     else:
-        logger.info(
-            "OTel traces: no OTLP endpoint; spans are not exported (set OTEL_EXPORTER_OTLP_* or disable SDK)."
-        )
+        logger.info("OTel traces: no OTLP endpoint; spans are not exported (set OTEL_EXPORTER_OTLP_* or disable SDK).")
 
     metrics_ep = _metrics_endpoint()
     if metrics_ep:
@@ -112,9 +107,7 @@ def setup_telemetry(app: FastAPI) -> None:
             OTLPMetricExporter(endpoint=metrics_ep, headers=headers),  # type: ignore[abstract]
             export_interval_millis=10_000,
         )
-        metrics.set_meter_provider(
-            MeterProvider(resource=resource, metric_readers=[reader])
-        )
+        metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[reader]))
     else:
         logger.info(
             "OTel metrics: no OTLP endpoint; metrics are not exported (set OTEL_EXPORTER_OTLP_* or disable SDK)."
@@ -152,9 +145,7 @@ def setup_telemetry(app: FastAPI) -> None:
         response_counter.add(1, attrs)
         return response
 
-    exclude = (
-        os.environ.get("OTEL_PYTHON_FASTAPI_EXCLUDED_URLS") or ""
-    ).strip() or None
+    exclude = (os.environ.get("OTEL_PYTHON_FASTAPI_EXCLUDED_URLS") or "").strip() or None
     FastAPIInstrumentor().instrument_app(app, excluded_urls=exclude)  # type: ignore[union-attr]
 
     global _requests_instrumented

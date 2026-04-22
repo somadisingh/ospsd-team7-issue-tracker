@@ -17,6 +17,4 @@ class UserSessionModel(Base):
     session_token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     access_token: Mapped[str] = mapped_column(Text)
     access_token_secret: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
