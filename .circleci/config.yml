@@ -141,6 +141,17 @@ jobs:
             }
             echo "Render deploy triggered successfully"
 
+  validate_infra:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run:
+          name: Validate render.yaml
+          command: |
+            pip install pyyaml
+            python -c "import yaml; yaml.safe_load(open('render.yaml'))"
+
 workflows:
   version: 2
   ci:
@@ -148,6 +159,7 @@ workflows:
       - lint
       - test
       - health_check
+      - validate_infra
       - deploy:
           requires:
             - lint
