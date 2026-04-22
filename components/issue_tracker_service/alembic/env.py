@@ -1,5 +1,5 @@
 """Alembic environment: run migrations with ``DATABASE_URL`` in the environment."""
-
+from issue_tracker_service.db.base import Base
 from __future__ import annotations
 
 import os
@@ -15,7 +15,6 @@ load_dotenv()
 
 # Import models so Base.metadata is populated
 import issue_tracker_service.db.models  # noqa: F401, E402
-from issue_tracker_service.db.base import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

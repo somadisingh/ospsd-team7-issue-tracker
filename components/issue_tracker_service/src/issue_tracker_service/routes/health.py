@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict
-
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import text
