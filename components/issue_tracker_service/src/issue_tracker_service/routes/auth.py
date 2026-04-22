@@ -2,7 +2,7 @@
 
 # import logging
 from typing import Dict
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -83,10 +83,20 @@ async def auth_login() -> RedirectResponse:
         raise HTTPException(status_code=500, detail="Missing request token secret from Trello client")
 
     oauth1_request_secrets[request_token] = client.request_token_secret
-    # logger.info(f"Stored request_token: {request_token}")
-    # logger.info(f"Available tokens in cache: {list(oauth1_request_secrets.keys())}")
 
-    return RedirectResponse(url=auth_url, status_code=302)
+    # Trello's OAuth authorize endpoint defaults to scope=read only. Without
+    # explicit read,write the issued access token can list boards but every
+    # POST/PUT/DELETE comes back 401. Also set a friendly name and a long-ish
+    # expiration so the user isn't re-authorizing every hour.
+    extra_params = urlencode(
+        {
+            "name": "ospsd-team7-local",
+            "scope": "read,write",
+            "expiration": "1day",
+        }
+    )
+    separator = "&" if "?" in auth_url else "?"
+    return RedirectResponse(url=f"{auth_url}{separator}{extra_params}", status_code=302)
 
 
 @router.get("/callback", response_model=AuthCallbackResponse)

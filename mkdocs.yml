@@ -21,6 +21,8 @@ theme:
 nav:
   - "Overview": "index.md"
   - "Architecture": "architecture.md"
+  - "AI Integration": "ai-integration.md"
+  - "Deployment": "deployment.md"
   - "API Reference":
     - "Issue Tracker Client API": "api/issue_tracker_client_api.md"
     - "Trello Client Implementation": "api/trello_client_impl.md"

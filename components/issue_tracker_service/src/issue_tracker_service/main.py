@@ -7,6 +7,7 @@ internal List and Member endpoints.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Dict, List, Optional
 
 import issue_tracker_client_api
@@ -29,10 +30,34 @@ from .routes.health import router as health_router
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Issue Tracker Service", version="0.2.0")
+app = FastAPI(title="Issue Tracker Service", version="0.3.0")
+
+# Allow the deployed frontend (and local dev server) to call us. The
+# actual origins list is read from CORS_ALLOW_ORIGINS (comma-separated);
+# we default to the local Next.js dev host so `npm run dev` works.
+_cors_origins = [
+    origin.strip() for origin in os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000").split(",") if origin.strip()
+]
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 app.include_router(health_router)
 app.include_router(auth_router)
+# AI router is included lazily so tests that don't need it don't force-import
+# the Anthropic SDK.
+try:  # pragma: no cover - exercised via integration tests
+    from .routes.ai import router as ai_router
+
+    app.include_router(ai_router)
+except ImportError as _ai_import_err:  # pragma: no cover
+    logger.warning("AI router not loaded: %s", _ai_import_err)
 
 user_sessions: Dict[str, Dict[str, str]] = {}
 
