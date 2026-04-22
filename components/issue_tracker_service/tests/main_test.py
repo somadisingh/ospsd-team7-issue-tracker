@@ -261,7 +261,10 @@ class TestHealthEndpoints:
     def test_health_check(self, test_client: TestClient) -> None:
         response = test_client.get("/health")
         assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        data = response.json()
+        assert data["status"] == "ok"
+        # With DATABASE_URL set (conftest uses SQLite), the response includes DB status
+        assert data.get("database") == "connected"
 
 
 @pytest.mark.unit

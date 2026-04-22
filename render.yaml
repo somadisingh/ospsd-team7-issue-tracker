@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: issue-tracker-service
+    runtime: python
+    plan: starter
+    buildCommand: pip install uv && uv sync --all-extras
+    startCommand: uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    preDeployCommand: pip install uv && uv sync --all-extras && cd components/issue_tracker_service && uv run alembic upgrade head
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: issue-tracker-db
+          property: connectionString
+      - key: OTEL_SERVICE_NAME
+        value: issue-tracker-service
+      - key: TRELLO_CALLBACK_URL
+        value: https://ospsd-team7-issue-tracker.onrender.com/auth/callback
+      - key: AI_ALLOW_MUTATIONS
+        value: "true"
+      - key: OTEL_SDK_DISABLED
+        value: "false"
+      - key: TRELLO_API_KEY
+        sync: false
+      - key: TRELLO_API_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_HEADERS
+        sync: false
+
+databases:
+  - name: issue-tracker-db
+    databaseName: issue_tracker
+    plan: starter
