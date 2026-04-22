@@ -74,6 +74,7 @@ jobs:
       - run:
           name: Run tests (unit, integration, e2e)
           command: |
+            export OTEL_SDK_DISABLED=true
             mkdir -p test-results
             uv run pytest \
               -m "unit or integration or e2e" \
@@ -117,6 +118,8 @@ jobs:
       - run:
           name: Start service and health check
           command: |
+            export DATABASE_URL="sqlite+pysqlite:///:memory:"
+            export OTEL_SDK_DISABLED=true
             uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port 8000 &
             sleep 5
             curl -sf http://localhost:8000/health || exit 1

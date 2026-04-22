@@ -1,9 +1,15 @@
 """Unit tests for OAuth authentication routes."""
 
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+
+# Ensure DB URL is set before importing the app (same as tests/conftest.py).
+os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
+os.environ.setdefault("OTEL_SDK_DISABLED", "true")
+
 from issue_tracker_service.main import app
 
 
@@ -66,10 +72,10 @@ class TestAuthCallback:
             "callback_url": "http://localhost/cb",
         }
 
-        client = TestClient(app)
-        response = client.get(
-            "/auth/callback?oauth_token=unknown_token&oauth_verifier=verifier",
-        )
+        with TestClient(app) as client:
+            response = client.get(
+                "/auth/callback?oauth_token=unknown_token&oauth_verifier=verifier",
+            )
 
         assert response.status_code == 400
         assert "Unknown or expired" in response.json()["detail"]
@@ -95,10 +101,10 @@ class TestAuthCallback:
         mock_instance.access_token_secret = "access_secret"
         mock_client_cls.return_value = mock_instance
 
-        client = TestClient(app)
-        response = client.get(
-            "/auth/callback?oauth_token=valid_token&oauth_verifier=verifier_123",
-        )
+        with TestClient(app) as client:
+            response = client.get(
+                "/auth/callback?oauth_token=valid_token&oauth_verifier=verifier_123",
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -126,10 +132,10 @@ class TestAuthCallback:
         mock_instance.access_token_secret = None
         mock_client_cls.return_value = mock_instance
 
-        client = TestClient(app)
-        response = client.get(
-            "/auth/callback?oauth_token=fail_token&oauth_verifier=verifier_123",
-        )
+        with TestClient(app) as client:
+            response = client.get(
+                "/auth/callback?oauth_token=fail_token&oauth_verifier=verifier_123",
+            )
 
         assert response.status_code == 500
         assert "Failed to obtain access token" in response.json()["detail"]
@@ -158,8 +164,8 @@ class TestAuthLogin:
         mock_instance.request_token_secret = "req_secret"
         mock_client_cls.return_value = mock_instance
 
-        client = TestClient(app, follow_redirects=False)
-        response = client.get("/auth/login")
+        with TestClient(app, follow_redirects=False) as client:
+            response = client.get("/auth/login")
 
         assert response.status_code == 302
         assert "trello.com" in response.headers.get("location", "")
@@ -181,8 +187,8 @@ class TestAuthLogin:
         mock_instance.request_token_secret = "secret"
         mock_client_cls.return_value = mock_instance
 
-        client = TestClient(app)
-        response = client.get("/auth/login")
+        with TestClient(app) as client:
+            response = client.get("/auth/login")
 
         assert response.status_code == 500
 
@@ -200,11 +206,11 @@ class TestGetAuthenticatedClient:
         }
         app.dependency_overrides.clear()
 
-        client = TestClient(app)
-        response = client.get(
-            "/boards",
-            headers={"X-Session-Token": "nonexistent_token"},
-        )
+        with TestClient(app) as client:
+            response = client.get(
+                "/boards",
+                headers={"X-Session-Token": "nonexistent_token"},
+            )
 
         assert response.status_code == 401
         app.dependency_overrides.clear()

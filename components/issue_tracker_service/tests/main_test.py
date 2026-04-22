@@ -13,12 +13,6 @@ from issue_tracker_client_api.exceptions import (
 from issue_tracker_service.main import app, get_authenticated_client
 
 
-@pytest.fixture
-def raw_client() -> TestClient:
-    """TestClient without auth override — for testing auth validation."""
-    return TestClient(app)
-
-
 @pytest.mark.unit
 class TestAuthValidation:
     """Test authentication and session token validation."""
@@ -171,8 +165,8 @@ class TestClientExceptionHandling:
     @pytest.fixture
     def error_client(self, mock_trello_client: MagicMock) -> TestClient:
         app.dependency_overrides[get_authenticated_client] = lambda: mock_trello_client
-        client = TestClient(app, raise_server_exceptions=False)
-        yield client  # type: ignore[misc]
+        with TestClient(app, raise_server_exceptions=False) as client:
+            yield client
         app.dependency_overrides.clear()
 
     def test_get_board_trello_error(self, error_client: TestClient, mock_trello_client: MagicMock) -> None:
@@ -207,8 +201,8 @@ class TestDomainExceptionHandlers:
     @pytest.fixture
     def error_client(self, mock_trello_client: MagicMock) -> TestClient:
         app.dependency_overrides[get_authenticated_client] = lambda: mock_trello_client
-        client = TestClient(app, raise_server_exceptions=False)
-        yield client  # type: ignore[misc]
+        with TestClient(app, raise_server_exceptions=False) as client:
+            yield client
         app.dependency_overrides.clear()
 
     def test_resource_not_found_returns_404(self, error_client: TestClient, mock_trello_client: MagicMock) -> None:
