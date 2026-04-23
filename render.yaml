@@ -34,4 +34,3 @@ services:
 databases:
   - name: issue-tracker-db
     databaseName: issue_tracker
-    plan: starter
