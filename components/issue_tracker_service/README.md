@@ -68,7 +68,7 @@ The service exports **OTLP/HTTP** traces and **HTTP metrics** when endpoints and
 
 **Metrics emitted (for dashboards):** `http.server.request.duration` (seconds), `http.server.responses` (count) with labels `http.method`, `http.route` (template/low-cardinality), and `status.class` (`200`, `400`, `500`, …) for success vs error rate.
 
-Run **database migrations** before first deploy traffic (from **repository root** so `.env` loads): `uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head` — on Render, use a release step that sets `DATABASE_URL` and runs the same, or your platform’s equivalent.
+Run **database migrations** before first deploy traffic (from **repository root** so `.env` loads): `uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head` — on **paid** Render with `preDeployCommand`, that can run automatically; on **Render free** web services, pre-deploy is unavailable, so run migrations once via **Render Shell** (same command, with `DATABASE_URL` set) after the first deploy or schema change.
 
 ## API Reference
 

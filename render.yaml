@@ -1,3 +1,6 @@
+# Free web tier: Render does not support `preDeployCommand`. Run Alembic once after deploy
+# (Render Shell: repo root, `uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head`
+# with `DATABASE_URL` in the environment), or upgrade to a paid plan to use pre-deploy migrations.
 services:
   - type: web
     name: issue-tracker-service
@@ -6,7 +9,6 @@ services:
     buildCommand: pip install uv && uv sync --all-extras
     startCommand: uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
-    preDeployCommand: pip install uv && uv sync --all-extras && cd components/issue_tracker_service && uv run alembic upgrade head
     envVars:
       - key: DATABASE_URL
         sync: false
