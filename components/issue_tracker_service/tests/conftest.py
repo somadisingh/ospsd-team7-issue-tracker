@@ -1,5 +1,11 @@
 """Conftest for issue_tracker_service tests."""
 
+# Unit tests use an isolated SQLite DB so CI does not need Postgres. Override before importing the app.
+import os
+
+os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
+os.environ["OTEL_SDK_DISABLED"] = "true"
+
 from collections.abc import Generator
 from unittest.mock import MagicMock
 
@@ -16,12 +22,19 @@ def mock_trello_client() -> MagicMock:
 
 
 @pytest.fixture
-def test_client(mock_trello_client: MagicMock) -> Generator[TestClient]:
+def test_client(mock_trello_client: MagicMock) -> Generator[TestClient, None, None]:
     """Provide a FastAPI TestClient with auth dependency overridden."""
     app.dependency_overrides[get_authenticated_client] = lambda: mock_trello_client
-    client = TestClient(app)
-    yield client
+    with TestClient(app) as client:
+        yield client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def raw_client() -> Generator[TestClient, None, None]:
+    """TestClient without auth override — for testing auth validation."""
+    with TestClient(app) as client:
+        yield client
 
 
 @pytest.fixture

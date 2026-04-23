@@ -5,15 +5,14 @@ from typing import Dict
 from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
-from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
+from issue_tracker_service.db.engine import get_engine
+from issue_tracker_service.db.sessions import create_session
 from trello_client_impl.client import TrelloClient
-
-# Load .env file at module import time
-load_dotenv()
 
 # Configure logging
 # logger = logging.getLogger(__name__)
@@ -118,9 +117,6 @@ async def auth_callback(
     Raises:
         HTTPException: If token exchange fails or token is invalid.
     """
-    # Import here to avoid circular imports
-    from issue_tracker_service.main import user_sessions
-
     # logger.info(f"Callback received with oauth_token: {oauth_token}")
     # logger.info(f"Available tokens in cache: {list(oauth1_request_secrets.keys())}")
 
@@ -147,10 +143,12 @@ async def auth_callback(
         raise HTTPException(status_code=500, detail="Failed to obtain access token")
 
     session_token = uuid4().hex
-    user_sessions[session_token] = {
-        "access_token": client.token,
-        "access_token_secret": client.access_token_secret,
-    }
+    with Session(get_engine(), expire_on_commit=False) as db:
+        create_session(
+            db,
+            session_token=session_token,
+            access_token=client.token,
+            access_token_secret=client.access_token_secret,
+        )
 
-    # return AuthCallbackResponse(session_token=session_token, session_user_token=client.token)
     return AuthCallbackResponse(session_token=session_token)

@@ -7,12 +7,15 @@ internal List and Member endpoints.
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Dict, List, Optional
 
 import issue_tracker_client_api
 from api.issue import Status
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 from issue_tracker_client_api.exceptions import (
     AuthenticationError,
     IssueTrackerError,
@@ -23,19 +26,28 @@ from pydantic import BaseModel
 
 from trello_client_impl.client import TrelloClient
 
-from .routes.auth import _trello_config
-from .routes.auth import router as auth_router
+from .db import get_db, get_session_credentials, init_db
+from .routes.auth import _trello_config, router as auth_router
 from .routes.health import router as health_router
+from .telemetry import setup_telemetry
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Issue Tracker Service", version="0.2.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    init_db()
+    yield
+
+
+app = FastAPI(
+    title="Issue Tracker Service",
+    version="0.2.0",
+    lifespan=lifespan,
+)
 
 app.include_router(health_router)
 app.include_router(auth_router)
-
-user_sessions: Dict[str, Dict[str, str]] = {}
-
 
 # ------------------------------------------------------------------ #
 # Exception handlers
@@ -180,17 +192,20 @@ def _member_to_response(member: issue_tracker_client_api.Member) -> MemberRespon
 # ------------------------------------------------------------------ #
 
 
-def get_authenticated_client(x_session_token: str = Header(..., alias="X-Session-Token")) -> TrelloClient:
-    session = user_sessions.get(x_session_token)
-    if not session:
+def get_authenticated_client(
+    x_session_token: str = Header(..., alias="X-Session-Token"),
+    db: Session = Depends(get_db),
+) -> TrelloClient:
+    creds = get_session_credentials(db, x_session_token)
+    if not creds:
         raise HTTPException(status_code=401, detail="Invalid or missing session token")
 
     config = _trello_config()
     return TrelloClient(
         api_key=config["api_key"],
         secret=config["secret"],
-        access_token=session["access_token"],
-        access_token_secret=session["access_token_secret"],
+        access_token=creds["access_token"],
+        access_token_secret=creds["access_token_secret"],
     )
 
 
@@ -355,4 +370,8 @@ async def get_issue_members(
 async def assign_issue(
     issue_id: str, body: AssignIssueRequest, client: TrelloClient = Depends(get_authenticated_client)
 ) -> Dict[str, bool]:
-    return {"success": client.assign_issue(issue_id=issue_id, member_id=body.member_id)}
+    success = client.assign_issue(issue_id=issue_id, member_id=body.member_id)
+    return {"success": success}
+
+
+setup_telemetry(app)
