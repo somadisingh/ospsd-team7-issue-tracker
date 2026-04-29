@@ -297,7 +297,9 @@ class TestListEndpoints:
         assert response.status_code == 200
         assert response.json()["board_id"] == ""
 
-    def test_create_list(self, test_client: TestClient, mock_trello_client: MagicMock, mock_list_obj: MagicMock) -> None:
+    def test_create_list(
+        self, test_client: TestClient, mock_trello_client: MagicMock, mock_list_obj: MagicMock
+    ) -> None:
         mock_trello_client.create_list.return_value = mock_list_obj
         response = test_client.post(
             "/lists",

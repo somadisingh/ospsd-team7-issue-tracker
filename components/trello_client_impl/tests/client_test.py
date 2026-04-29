@@ -517,10 +517,16 @@ class TestTrelloClientErrorPaths:
         assert len(lists) == 1
 
     def test_get_issues_in_list_respects_max_issues(
-        self, client: TrelloClient, mocker: MockerFixture, mock_issue_response: dict[str, Any]
+        self,
+        client: TrelloClient,
+        mocker: MockerFixture,
+        mock_issue_response: dict[str, Any],
     ) -> None:
         mock_resp = MagicMock()
-        mock_resp.json.side_effect = [[mock_issue_response, mock_issue_response], {"name": "To Do"}]
+        mock_resp.json.side_effect = [
+            [mock_issue_response, mock_issue_response],
+            {"name": "To Do"},
+        ]
         mocker.patch(
             "trello_client_impl.client.requests.request", return_value=mock_resp
         )
