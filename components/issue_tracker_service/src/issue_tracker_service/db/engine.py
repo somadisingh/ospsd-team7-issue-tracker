@@ -8,6 +8,7 @@ from collections.abc import Generator
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -19,13 +20,29 @@ _engine: Engine | None = None
 SessionLocal: sessionmaker[Session] | None = None
 
 
+def _normalize_postgres_url(url: str) -> str:
+    """Use psycopg3 (``psycopg``); bare ``postgresql://`` defaults to SQLAlchemy's psycopg2 dialect."""
+    u = url.strip().strip('"').strip("'")
+    if not u or u.lower().startswith("sqlite"):
+        return u
+    try:
+        parsed = make_url(u)
+    except Exception:
+        return u
+    if parsed.drivername in ("postgresql", "postgres"):
+        return parsed.set(drivername="postgresql+psycopg").render_as_string(hide_password=False)
+    if parsed.drivername == "postgresql+psycopg2":
+        return parsed.set(drivername="postgresql+psycopg").render_as_string(hide_password=False)
+    return u
+
+
 def get_database_url() -> str:
     """Return DSN for SQLAlchemy. Set ``DATABASE_URL`` in the environment (or .env)."""
     url = os.environ.get("DATABASE_URL")
     if not url:
         msg = "DATABASE_URL is not set. Add it to your environment or .env (see .env.example)."
         raise RuntimeError(msg)
-    return url
+    return _normalize_postgres_url(url)
 
 
 def _is_sqlite(url: str) -> bool:
