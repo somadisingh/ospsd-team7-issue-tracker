@@ -16,6 +16,8 @@ from issue_tracker_service_client.models.http_validation_error import (
     HTTPValidationError,
 )
 from issue_tracker_service_client.models.issue_response import IssueResponse
+from issue_tracker_service_client.models.list_response import ListResponse
+from issue_tracker_service_client.models.member_response import MemberResponse
 
 
 @pytest.mark.unit
@@ -388,6 +390,89 @@ class TestServiceClientAdapter:
         mock_api.sync.return_value = None
 
         assert adapter.delete_issue("issue_1") is False
+
+    # ------------------------------------------------------------------
+    # List operations
+    # ------------------------------------------------------------------
+
+    @patch("issue_tracker_adapter.client.get_lists_api")
+    def test_get_lists_filters_non_list_responses(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        valid = MagicMock(spec=ListResponse)
+        valid.id = "l1"
+        valid.name = "To Do"
+        valid.board_id = "b1"
+        mock_api.sync.return_value = [valid, "not-a-list"]
+
+        lists = list(adapter.get_lists("b1"))
+
+        assert len(lists) == 1
+        assert lists[0].id == "l1"
+
+    @patch("issue_tracker_adapter.client.get_issues_in_list_api")
+    def test_get_issues_in_list_non_list_response_returns_empty(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.return_value = {"unexpected": "shape"}
+
+        issues = list(adapter.get_issues_in_list("l1"))
+
+        assert issues == []
+
+    @patch("issue_tracker_adapter.client.delete_list_api")
+    def test_delete_list_success_true(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        result = MagicMock()
+        result.additional_properties = {"success": True}
+        mock_api.sync.return_value = result
+
+        assert adapter.delete_list("l1") is True
+
+    # ------------------------------------------------------------------
+    # Member operations
+    # ------------------------------------------------------------------
+
+    @patch("issue_tracker_adapter.client.add_member_api")
+    def test_add_member_to_board_none_response_returns_false(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.return_value = None
+
+        assert adapter.add_member_to_board("b1", "m1") is False
+
+    @patch("issue_tracker_adapter.client.get_members_api")
+    def test_get_members_on_issue_non_list_response_returns_empty(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.return_value = {"unexpected": "shape"}
+
+        members = adapter.get_members_on_issue("i1")
+
+        assert members == []
+
+    @patch("issue_tracker_adapter.client.get_members_api")
+    def test_get_members_on_issue_filters_non_member_responses(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        valid = MagicMock(spec=MemberResponse)
+        valid.id = "m1"
+        valid.username = "alice"
+        mock_api.sync.return_value = [valid, "not-a-member"]
+
+        members = adapter.get_members_on_issue("i1")
+
+        assert len(members) == 1
+        assert members[0].id == "m1"
+
+    @patch("issue_tracker_adapter.client.assign_api")
+    def test_assign_issue_none_response_returns_false(
+        self, mock_api: MagicMock, adapter: ServiceClientAdapter
+    ) -> None:
+        mock_api.sync.return_value = None
+
+        assert adapter.assign_issue("i1", "m1") is False
 
     # ------------------------------------------------------------------
     # OAuth — not implemented

@@ -276,3 +276,72 @@ class TestIssueEndpoints:
         response = test_client.delete("/issues/issue_789", headers={"X-Session-Token": "tok"})
         assert response.status_code == 200
         assert response.json() == {"success": True}
+
+
+@pytest.mark.unit
+class TestListEndpoints:
+    """Test list-related endpoints."""
+
+    def test_get_lists(self, test_client: TestClient, mock_trello_client: MagicMock, mock_list_obj: MagicMock) -> None:
+        mock_trello_client.get_lists.return_value = [mock_list_obj]
+        response = test_client.get("/boards/board_123/lists", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 200
+        assert response.json() == [{"id": "list_456", "name": "To Do", "board_id": "board_123"}]
+
+    def test_get_list_none_board_id_defaults_empty_string(
+        self, test_client: TestClient, mock_trello_client: MagicMock, mock_list_obj: MagicMock
+    ) -> None:
+        mock_list_obj.board_id = None
+        mock_trello_client.get_list.return_value = mock_list_obj
+        response = test_client.get("/lists/list_456", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 200
+        assert response.json()["board_id"] == ""
+
+    def test_create_list(self, test_client: TestClient, mock_trello_client: MagicMock, mock_list_obj: MagicMock) -> None:
+        mock_trello_client.create_list.return_value = mock_list_obj
+        response = test_client.post(
+            "/lists",
+            json={"board_id": "board_123", "name": "Doing"},
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 200
+        assert response.json()["name"] == "To Do"
+
+    def test_get_issues_in_list_with_limit(self, test_client: TestClient, mock_trello_client: MagicMock) -> None:
+        response = test_client.get("/lists/list_456/issues?max_issues=10", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 200
+        mock_trello_client.get_issues_in_list.assert_called_once_with(list_id="list_456", max_issues=10)
+
+
+@pytest.mark.unit
+class TestMemberEndpoints:
+    """Test member-related endpoints."""
+
+    def test_add_member_to_board(self, test_client: TestClient, mock_trello_client: MagicMock) -> None:
+        mock_trello_client.add_member_to_board.return_value = True
+        response = test_client.post(
+            "/boards/board_123/members",
+            json={"member_id": "member_abc"},
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"success": True}
+
+    def test_get_issue_members_username_defaults_empty_string(
+        self, test_client: TestClient, mock_trello_client: MagicMock, mock_member: MagicMock
+    ) -> None:
+        mock_member.username = None
+        mock_trello_client.get_members_on_issue.return_value = [mock_member]
+        response = test_client.get("/issues/issue_789/members", headers={"X-Session-Token": "tok"})
+        assert response.status_code == 200
+        assert response.json() == [{"id": "member_abc", "username": ""}]
+
+    def test_assign_issue_false_is_returned(self, test_client: TestClient, mock_trello_client: MagicMock) -> None:
+        mock_trello_client.assign_issue.return_value = False
+        response = test_client.post(
+            "/issues/issue_789/assign",
+            json={"member_id": "member_abc"},
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"success": False}

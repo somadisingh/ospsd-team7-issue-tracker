@@ -202,6 +202,19 @@ class TestTrelloClient:
         assert len(issues) == 1
         assert issues[0].status == Status.TO_DO
 
+    def test_trello_client_get_issues_skips_invalid_card_collections(
+        self, client_with_creds: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        lists_data = [_mock_list_response("list_todo", "To Do")]
+        mock_response = MagicMock()
+        mock_response.json.side_effect = [lists_data, {"not": "a list"}]
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_response
+        )
+
+        issues = list(client_with_creds.get_issues("board_1"))
+        assert issues == []
+
     def test_trello_client_update_issue_status(
         self,
         client_with_creds: TrelloClient,
@@ -229,6 +242,85 @@ class TestTrelloClient:
 
         issue = client_with_creds.update_issue("issue_id", status=Status.COMPLETED)
         assert issue is not None
+
+    def test_trello_client_update_issue_with_explicit_board_id(
+        self,
+        client_with_creds: TrelloClient,
+        mocker: MockerFixture,
+        mock_issue_response: dict[str, Any],
+    ) -> None:
+        lists_data = [
+            _mock_list_response("list_todo", "To Do", "board_1"),
+            _mock_list_response("list_done", "Done", "board_1"),
+        ]
+        updated_card = {**mock_issue_response, "idList": "list_done"}
+        list_name_resp = {"id": "list_done", "name": "Done"}
+
+        mock_response = MagicMock()
+        mock_response.json.side_effect = [lists_data, updated_card, list_name_resp]
+        mock_request = mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_response
+        )
+
+        issue = client_with_creds.update_issue(
+            "issue_id", status=Status.COMPLETED, board_id="board_1"
+        )
+        assert issue is not None
+        # Does not need the extra GET /cards/{issue_id} when board_id is provided.
+        card_get_calls = [
+            call
+            for call in mock_request.call_args_list
+            if call.args[0] == "GET"
+            and call.args[1] == "https://api.trello.com/1/cards/issue_id"
+        ]
+        assert card_get_calls == []
+
+    def test_trello_client_create_list_and_update_list(
+        self, client_with_creds: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        created = {"id": "list_1", "name": "To Do", "idBoard": "board_1"}
+        updated = {"id": "list_1", "name": "Doing", "idBoard": "board_1"}
+        mock_response = MagicMock()
+        mock_response.json.side_effect = [created, updated]
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_response
+        )
+
+        created_list = client_with_creds.create_list("board_1", "To Do")
+        updated_list = client_with_creds.update_list("list_1", "Doing")
+
+        assert created_list.id == "list_1"
+        assert updated_list.name == "Doing"
+
+    def test_trello_client_get_members_and_assign_issue(
+        self,
+        client_with_creds: TrelloClient,
+        mocker: MockerFixture,
+        mock_member_response: dict[str, Any],
+    ) -> None:
+        mock_response = MagicMock()
+        mock_response.json.side_effect = [[mock_member_response], {"ok": True}]
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_response
+        )
+
+        members = client_with_creds.get_members_on_issue("issue_1")
+        assigned = client_with_creds.assign_issue("issue_1", "member_1")
+
+        assert len(members) == 1
+        assert members[0].id == "test_member_id"
+        assert assigned is True
+
+    def test_trello_client_get_members_non_list_returns_empty(
+        self, client_with_creds: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"unexpected": "shape"}
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_response
+        )
+
+        assert client_with_creds.get_members_on_issue("issue_1") == []
 
 
 @pytest.mark.unit
@@ -400,6 +492,51 @@ class TestTrelloClientErrorPaths:
         )
         boards = list(client.get_boards())
         assert len(boards) == 1
+
+    def test_get_lists_non_list_response(
+        self, client: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = "not_a_list"
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_resp
+        )
+        lists = list(client.get_lists("board_1"))
+        assert lists == []
+
+    def test_get_lists_filters_invalid_entries(
+        self, client: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        valid = {"id": "list_1", "name": "To Do", "idBoard": "board_1"}
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = [valid, "invalid"]
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_resp
+        )
+        lists = list(client.get_lists("board_1"))
+        assert len(lists) == 1
+
+    def test_get_issues_in_list_respects_max_issues(
+        self, client: TrelloClient, mocker: MockerFixture, mock_issue_response: dict[str, Any]
+    ) -> None:
+        mock_resp = MagicMock()
+        mock_resp.json.side_effect = [[mock_issue_response, mock_issue_response], {"name": "To Do"}]
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_resp
+        )
+        issues = list(client.get_issues_in_list("list_1", max_issues=1))
+        assert len(issues) == 1
+
+    def test_get_issues_in_list_non_list_response(
+        self, client: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = "not_a_list"
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_resp
+        )
+        issues = list(client.get_issues_in_list("list_1"))
+        assert issues == []
 
 
 @pytest.mark.unit
