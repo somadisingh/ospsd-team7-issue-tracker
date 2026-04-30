@@ -217,44 +217,45 @@ The FastAPI service is deployed on [Render](https://ospsd-team7-issue-tracker.on
 | **Build command** | `pip install uv && uv sync --all-extras` |
 | **Start command** | `uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port $PORT` |
 
-### Deployment with Render Blueprint
+### Deployment with Terraform (authoritative path)
 
-The project uses a **Render Blueprint** ([`render.yaml`](render.yaml)) to define all infrastructure as code. When the repository is connected to Render, the platform reads `render.yaml` and automatically provisions and configures the declared resources.
+Infrastructure is managed with Terraform in [`infrastructure/terraform`](infrastructure/terraform). This is the source of truth for Render resources.
 
-**How it works:**
+Managed resources:
 
-1. `render.yaml` lives in the repository root and declares the web service, database, and environment variables.
-2. When you connect the repo to Render (Dashboard → New → Blueprint → select this GitHub repo), Render syncs infrastructure state with the blueprint definition.
-3. On every push to the `main` branch, Render pulls the latest code, runs the build, executes pre-deploy commands (migrations), and starts the service.
+- Render web service (`render_web_service.issue_tracker_service`)
+- Render Postgres database (`render_postgres.issue_tracker_db`)
+- environment variables, including `DATABASE_URL` wiring from managed Postgres
 
-**What `render.yaml` defines:**
+Apply flow:
 
-| Resource | Configuration |
-|---|---|
-| **Web Service** | `issue-tracker-service` — Python runtime, starter plan, health check at `/health` |
-| **Database** | `issue-tracker-db` — PostgreSQL (`issue_tracker` database), starter plan |
-| **Build** | `pip install uv && uv sync --all-extras` |
-| **Start** | `uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port $PORT` |
-| **Pre-deploy** | Installs dependencies and runs Alembic migrations before each deploy |
-
-#### DATABASE_URL provisioning
-
-The `DATABASE_URL` environment variable is **automatically provisioned** by Render. In `render.yaml`, it is mapped from the blueprint database definition:
-
-```yaml
-- key: DATABASE_URL
-  fromDatabase:
-    name: issue-tracker-db
-    property: connectionString
+```bash
+cd infrastructure/terraform
+terraform init
+terraform fmt -check -recursive
+terraform validate
+terraform plan -out=tfplan
+terraform apply tfplan
 ```
 
-Render creates the PostgreSQL instance and injects the connection string into the web service at runtime. No manual configuration is needed for the database URL.
+Required Terraform auth environment variables:
 
-#### Setting secrets in the Render dashboard
+- `RENDER_API_KEY`
+- `RENDER_OWNER_ID`
 
-Several environment variables contain sensitive values and are marked with `sync: false` in `render.yaml`. This means they are **not** stored in version control — you must set them manually in the Render dashboard.
+`render.yaml` is retained only as a legacy reference and is not the authoritative deployment workflow.
 
-**Steps:** Render Dashboard → select `issue-tracker-service` → Environment → add each variable.
+#### Setting secrets for Terraform-managed deploys
+
+Sensitive values are injected through Terraform variables (typically CI secrets), not committed in git.
+
+Common variables:
+
+- `TF_VAR_trello_api_key`
+- `TF_VAR_trello_api_secret`
+- `TF_VAR_anthropic_api_key`
+- `TF_VAR_otel_exporter_otlp_endpoint`
+- `TF_VAR_otel_exporter_otlp_headers`
 
 | Variable | Description | Where to get it |
 |---|---|---|
@@ -264,7 +265,7 @@ Several environment variables contain sensitive values and are marked with `sync
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint URL (e.g. Grafana, Honeycomb) | Your observability backend account |
 | `OTEL_EXPORTER_OTLP_HEADERS` | Auth headers for OTLP export (e.g. `Authorization=Basic%20...`) | Your observability backend account |
 
-**Non-secret variables** (set automatically from `render.yaml`):
+**Non-secret variables** (set by Terraform defaults):
 
 | Variable | Value |
 |---|---|
@@ -275,13 +276,13 @@ Several environment variables contain sensitive values and are marked with `sync
 
 ### Database Migrations
 
-Database schema changes are managed by **Alembic**. Migrations run automatically on every deploy via the `preDeployCommand` in `render.yaml`:
+Database schema changes are managed by **Alembic**. Run migrations explicitly after deploy (or as a dedicated migration step in CI):
 
 ```
-pip install uv && uv sync --all-extras && cd components/issue_tracker_service && uv run alembic upgrade head
+uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head
 ```
 
-This ensures the database schema is always up-to-date before the new version of the service starts accepting traffic.
+This ensures the schema is updated to match the deployed code.
 
 **Running migrations locally:**
 
@@ -330,6 +331,8 @@ Set the following environment variables in the Render dashboard (see "Setting se
 
 Telemetry is disabled when `OTEL_SDK_DISABLED=true` (used in CI and local development).
 
+For KPI panel/query guidance and runbook steps, see [`docs/monitoring/grafana-kpi-runbook.md`](docs/monitoring/grafana-kpi-runbook.md).
+
 ### E2E Testing
 
 The stable base URL for end-to-end tests against the deployed service is:
@@ -361,8 +364,11 @@ Every push triggers the following CircleCI workflow (see [`.circleci/config.yml`
 1. **`lint`** — Ruff (check + format) and Mypy
 2. **`test`** — Unit, integration, and E2E tests with coverage reporting
 3. **`health_check`** — Starts the service locally and verifies `GET /health` returns 200
-4. **`validate_infra`** — Validates `render.yaml` YAML syntax
-5. **`deploy`** — Triggers a Render deploy hook (runs only after all jobs above pass)
+4. **`terraform_fmt_validate`** — Terraform style and validation checks
+5. **`terraform_plan`** — Terraform execution plan for Render resources
+6. **`terraform_apply`** — Branch-gated apply (`hw3`) + post-apply `/health` verification, runs only when `TF_AUTO_APPLY=true`
+
+For free-tier safety, keep `TF_AUTO_APPLY` unset by default so CI validates infra without forcing resource mutations on every push.
 
 ### A note on OAuth
 
@@ -397,14 +403,14 @@ For more details, see [docs/ci-cd.md](docs/ci-cd.md).
 
 ### Migration failures
 
-**Symptom:** Deploy fails during the pre-deploy command with an Alembic error.
+**Symptom:** Service deploys but DB schema is outdated, or migration command fails.
 
 **Possible causes:**
 - A migration script has a syntax error or references a non-existent column/table
 - The database is in an inconsistent state (e.g., a previous migration was partially applied)
 
 **Fix:**
-1. Check the deploy logs in Render for the specific Alembic error message.
+1. Run `uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head` and inspect the exact error.
 2. If a migration was partially applied, connect to the database and inspect the `alembic_version` table.
 3. Fix the migration script, commit, and push to trigger a new deploy.
 4. As a last resort, manually run `uv run alembic downgrade -1` and then re-deploy.

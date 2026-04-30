@@ -1,3 +1,4 @@
+# Legacy reference only. Authoritative IaC is Terraform under `infrastructure/terraform/`.
 # Free web tier: Render does not support `preDeployCommand`. Run Alembic once after deploy
 # (Render Shell: repo root, `uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head`
 # with `DATABASE_URL` in the environment), or upgrade to a paid plan to use pre-deploy migrations.

@@ -118,19 +118,20 @@ Run **database migrations** before first deploy traffic (from **repository root*
 
 ## Deployment
 
-The service is deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com) as a web service.
+The service is deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com), with infrastructure managed via Terraform.
 
 | Setting            | Value                                                                       |
 | ------------------ | --------------------------------------------------------------------------- |
-| **Platform**       | [Render](https://render.com)                                                |
-| **URL**            | `https://ospsd-team7-issue-tracker.onrender.com`                            |
-| **Build command**  | `pip install uv && uv sync --all-extras`                                    |
-| **Start command**  | `uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port $PORT` |
-| **Python version** | 3.12                                                                        |
+| **Platform**       | [Render](https://render.com)                                                       |
+| **URL**            | `https://ospsd-team7-issue-tracker.onrender.com`                                   |
+| **IaC source**     | `infrastructure/terraform/`                                                        |
+| **Build command**  | `pip install uv && uv sync --all-extras`                                           |
+| **Start command**  | `uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port $PORT`        |
+| **Python version** | 3.12                                                                               |
 
-Environment variables (`TRELLO_API_KEY`, `TRELLO_API_SECRET`, `TRELLO_CALLBACK_URL`) are configured in the Render dashboard under **Environment > Secret Files / Environment Variables**.
+Terraform creates and updates Render resources (service + Postgres) and wires `DATABASE_URL` from the managed Postgres instance to the service.
 
-CircleCI triggers a Render deploy hook after all lint, test, and health check jobs pass. See `.circleci/config.yml` for details.
+CircleCI runs Terraform fmt/validate/plan/apply (branch-gated) after quality checks. See `.circleci/config.yml` for details.
 
 ## Running locally
 

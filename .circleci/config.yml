@@ -124,33 +124,99 @@ jobs:
             sleep 5
             curl -sf http://localhost:8000/health || exit 1
 
-  deploy:
+  terraform_fmt_validate:
     docker:
-      - image: cimg/python:3.12
-    steps:
-      - run:
-          name: Trigger Render deploy
-          command: |
-            if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-              echo "RENDER_DEPLOY_HOOK_URL not set; skipping deploy"
-              exit 0
-            fi
-            curl -X POST -f -s -o /dev/null -w "%{http_code}" "$RENDER_DEPLOY_HOOK_URL" | grep -qE '^2[0-9]{2}$' || {
-              echo "Render deploy hook returned non-2xx"
-              exit 1
-            }
-            echo "Render deploy triggered successfully"
-
-  validate_infra:
-    docker:
-      - image: cimg/python:3.12
+      - image: cimg/base:stable
     steps:
       - checkout
       - run:
-          name: Validate render.yaml
+          name: Install Terraform
           command: |
-            pip install pyyaml
-            python -c "import yaml; yaml.safe_load(open('render.yaml'))"
+            sudo apt-get update
+            sudo apt-get install -y wget unzip
+            wget -q https://releases.hashicorp.com/terraform/1.8.5/terraform_1.8.5_linux_amd64.zip
+            unzip -q terraform_1.8.5_linux_amd64.zip
+            sudo mv terraform /usr/local/bin/terraform
+            terraform -version
+
+      - run:
+          name: Terraform fmt + validate
+          command: |
+            cd infrastructure/terraform
+            terraform fmt -check -recursive
+            terraform init -backend=false
+            terraform validate
+
+  terraform_plan:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - run:
+          name: Install Terraform
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y wget unzip
+            wget -q https://releases.hashicorp.com/terraform/1.8.5/terraform_1.8.5_linux_amd64.zip
+            unzip -q terraform_1.8.5_linux_amd64.zip
+            sudo mv terraform /usr/local/bin/terraform
+            terraform -version
+
+      - run:
+          name: Terraform plan
+          command: |
+            if [ -z "$RENDER_API_KEY" ] || [ -z "$RENDER_OWNER_ID" ]; then
+              echo "RENDER_API_KEY and/or RENDER_OWNER_ID missing; skipping terraform plan in this context."
+              exit 0
+            fi
+            cd infrastructure/terraform
+            terraform init
+            terraform plan -out=tfplan
+
+  terraform_apply:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - run:
+          name: Install Terraform
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y wget unzip
+            wget -q https://releases.hashicorp.com/terraform/1.8.5/terraform_1.8.5_linux_amd64.zip
+            unzip -q terraform_1.8.5_linux_amd64.zip
+            sudo mv terraform /usr/local/bin/terraform
+            terraform -version
+
+      - run:
+          name: Terraform apply + health verification
+          command: |
+            if [ "${TF_AUTO_APPLY}" != "true" ]; then
+              echo "TF_AUTO_APPLY is not true; skipping terraform apply for safe CI defaults."
+              exit 0
+            fi
+            if [ -z "$RENDER_API_KEY" ] || [ -z "$RENDER_OWNER_ID" ]; then
+              echo "RENDER_API_KEY and/or RENDER_OWNER_ID missing; cannot apply."
+              exit 1
+            fi
+            cd infrastructure/terraform
+            terraform init
+            terraform apply -auto-approve
+            SERVICE_URL="$(terraform output -raw web_service_url)"
+            if [ -z "$SERVICE_URL" ]; then
+              echo "Missing web_service_url output"
+              exit 1
+            fi
+            for i in $(seq 1 20); do
+              if curl -sf "${SERVICE_URL}/health" >/dev/null; then
+                echo "Health check passed: ${SERVICE_URL}/health"
+                exit 0
+              fi
+              echo "Waiting for health endpoint... attempt $i/20"
+              sleep 15
+            done
+            echo "Health check failed after retries"
+            exit 1
 
 workflows:
   version: 2
@@ -159,9 +225,18 @@ workflows:
       - lint
       - test
       - health_check
-      - validate_infra
-      - deploy:
+      - terraform_fmt_validate:
           requires:
             - lint
             - test
             - health_check
+      - terraform_plan:
+          requires:
+            - terraform_fmt_validate
+      - terraform_apply:
+          requires:
+            - terraform_plan
+          filters:
+            branches:
+              only:
+                - hw3
