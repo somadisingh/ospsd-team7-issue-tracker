@@ -2,7 +2,7 @@
 
 ## Overview
 
-`issue_tracker_service` is a FastAPI application that wraps the `trello_client_impl` behind REST endpoints with OAuth 1.0a session-based authentication. It is the main deployment unit for this project, deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com).
+`issue_tracker_service` is a FastAPI application that wraps the `trello_client_impl` behind REST endpoints with OAuth 1.0a session-based authentication. It is the main deployment unit for this project (**Google Cloud Run** — see repository **`README.md`** and **`infrastructure/terraform/`**).
 
 ## Purpose
 
@@ -51,7 +51,7 @@ Browser/Client
 | --------------------- | -------- | ---------------------------------------------------------------------- |
 | `TRELLO_API_KEY`      | Yes      | Trello API key                                                         |
 | `TRELLO_API_SECRET`   | Yes      | Trello API secret (consumer secret)                                    |
-| `DATABASE_URL`        | Yes      | SQLAlchemy URL (e.g. Postgres on Render or local)                      |
+| `DATABASE_URL`        | Yes      | SQLAlchemy URL (e.g. Postgres/Supabase or local SQLite/Postgres)      |
 | `TRELLO_CALLBACK_URL` | No       | OAuth callback URL (defaults to `http://localhost:8000/auth/callback`) |
 
 ### OpenTelemetry (course: latency, success vs failure)
@@ -68,7 +68,7 @@ The service exports **OTLP/HTTP** traces and **HTTP metrics** when endpoints and
 
 **Metrics emitted (for dashboards):** `http.server.request.duration` (seconds), `http.server.responses` (count) with labels `http.method`, `http.route` (template/low-cardinality), and `status.class` (`200`, `400`, `500`, …) for success vs error rate.
 
-Run **database migrations** before first deploy traffic (from **repository root** so `.env` loads): `uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head` — on **paid** Render with `preDeployCommand`, that can run automatically; on **Render free** web services, pre-deploy is unavailable, so run migrations once via **Render Shell** (same command, with `DATABASE_URL` set) after the first deploy or schema change.
+On **Cloud Run**, **`docker-entrypoint.sh`** runs **`alembic upgrade head`** before **uvicorn** (override with **`SKIP_ALEMBIC=true`** only for debugging). Locally, from repo root: `uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head`.
 
 ## API Reference
 
@@ -118,20 +118,11 @@ Run **database migrations** before first deploy traffic (from **repository root*
 
 ## Deployment
 
-The service is deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com), with infrastructure managed via Terraform.
+Production hosting is modeled with **GCP Cloud Run + Terraform** at [`infrastructure/terraform/`](../../../infrastructure/terraform/) (Docker image builds from repo root; container runs Alembic then uvicorn). Details: [`../../../infrastructure/terraform/README.md`](../../../infrastructure/terraform/README.md).
 
-| Setting            | Value                                                                       |
-| ------------------ | --------------------------------------------------------------------------- |
-| **Platform**       | [Render](https://render.com)                                                       |
-| **URL**            | `https://ospsd-team7-issue-tracker.onrender.com`                                   |
-| **IaC source**     | `infrastructure/terraform/`                                                        |
-| **Build command**  | `pip install uv && uv sync --all-extras`                                           |
-| **Start command**  | `uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port $PORT`        |
-| **Python version** | 3.12                                                                               |
+On **`main`**, CircleCI **`deploy_gcp`** can **`gcloud builds submit`** and optionally **`terraform apply`** once you configure GCP env vars (**`infrastructure/terraform/README.md`** → *Automate deploys on `main`*).
 
-Terraform creates and updates Render resources (service + Postgres) and wires `DATABASE_URL` from the managed Postgres instance to the service.
-
-CircleCI runs Terraform fmt/validate/plan/apply (branch-gated) after quality checks. See `.circleci/config.yml` for details.
+Environment secrets for Cloud Run land in **Secret Manager** via Terraform (`database_url`, Trello credentials, optional OTLP/Anthropic). Use `terraform output trello_callback_hint` to align **`TRELLO_CALLBACK_URL`** with the Cloud Run hostname after the first revision.
 
 ## Running locally
 

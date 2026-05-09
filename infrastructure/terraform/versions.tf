@@ -1,16 +1,17 @@
 terraform {
-  required_version = ">= 1.6.0"
+  backend "gcs" {}
+
+  required_version = ">= 1.9"
 
   required_providers {
-    render = {
-      source  = "render-oss/render"
-      version = ">= 1.7.0"
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 6.0"
     }
   }
 }
 
-provider "render" {
-  # Read credentials from environment variables:
-  # - RENDER_API_KEY
-  # - RENDER_OWNER_ID
+provider "google" {
+  project = var.project_id
+  region  = var.region
 }

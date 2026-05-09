@@ -124,99 +124,38 @@ jobs:
             sleep 5
             curl -sf http://localhost:8000/health || exit 1
 
-  terraform_fmt_validate:
+  validate_infra:
     docker:
-      - image: cimg/base:stable
+      - image: cimg/python:3.12
     steps:
       - checkout
       - run:
-          name: Install Terraform
+          name: Validate Terraform
           command: |
-            sudo apt-get update
-            sudo apt-get install -y wget unzip
-            wget -q https://releases.hashicorp.com/terraform/1.8.5/terraform_1.8.5_linux_amd64.zip
-            unzip -q terraform_1.8.5_linux_amd64.zip
-            sudo mv terraform /usr/local/bin/terraform
-            terraform -version
-
-      - run:
-          name: Terraform fmt + validate
-          command: |
+            set -eu
+            TVER=1.10.5
+            curl -sSfL -o terraform.zip \
+              "https://releases.hashicorp.com/terraform/${TVER}/terraform_${TVER}_linux_amd64.zip"
+            unzip -o terraform.zip terraform
+            chmod +x terraform
+            mkdir -p /tmp/tf-"$TVER" && mv terraform /tmp/tf-"$TVER"/
+            export PATH="/tmp/tf-$TVER:${PATH}"
             cd infrastructure/terraform
             terraform fmt -check -recursive
-            terraform init -backend=false
+            terraform init -backend=false -input=false
             terraform validate
 
-  terraform_plan:
+  deploy_gcp:
     docker:
-      - image: cimg/base:stable
+      - image: google/cloud-sdk:stable
     steps:
       - checkout
       - run:
-          name: Install Terraform
+          name: GCP Cloud Build (optional Terraform apply)
           command: |
-            sudo apt-get update
-            sudo apt-get install -y wget unzip
-            wget -q https://releases.hashicorp.com/terraform/1.8.5/terraform_1.8.5_linux_amd64.zip
-            unzip -q terraform_1.8.5_linux_amd64.zip
-            sudo mv terraform /usr/local/bin/terraform
-            terraform -version
-
-      - run:
-          name: Terraform plan
-          command: |
-            if [ -z "$RENDER_API_KEY" ] || [ -z "$RENDER_OWNER_ID" ]; then
-              echo "RENDER_API_KEY and/or RENDER_OWNER_ID missing; skipping terraform plan in this context."
-              exit 0
-            fi
-            cd infrastructure/terraform
-            terraform init
-            terraform plan -out=tfplan
-
-  terraform_apply:
-    docker:
-      - image: cimg/base:stable
-    steps:
-      - checkout
-      - run:
-          name: Install Terraform
-          command: |
-            sudo apt-get update
-            sudo apt-get install -y wget unzip
-            wget -q https://releases.hashicorp.com/terraform/1.8.5/terraform_1.8.5_linux_amd64.zip
-            unzip -q terraform_1.8.5_linux_amd64.zip
-            sudo mv terraform /usr/local/bin/terraform
-            terraform -version
-
-      - run:
-          name: Terraform apply + health verification
-          command: |
-            if [ "${TF_AUTO_APPLY}" != "true" ]; then
-              echo "TF_AUTO_APPLY is not true; skipping terraform apply for safe CI defaults."
-              exit 0
-            fi
-            if [ -z "$RENDER_API_KEY" ] || [ -z "$RENDER_OWNER_ID" ]; then
-              echo "RENDER_API_KEY and/or RENDER_OWNER_ID missing; cannot apply."
-              exit 1
-            fi
-            cd infrastructure/terraform
-            terraform init
-            terraform apply -auto-approve
-            SERVICE_URL="$(terraform output -raw web_service_url)"
-            if [ -z "$SERVICE_URL" ]; then
-              echo "Missing web_service_url output"
-              exit 1
-            fi
-            for i in $(seq 1 20); do
-              if curl -sf "${SERVICE_URL}/health" >/dev/null; then
-                echo "Health check passed: ${SERVICE_URL}/health"
-                exit 0
-              fi
-              echo "Waiting for health endpoint... attempt $i/20"
-              sleep 15
-            done
-            echo "Health check failed after retries"
-            exit 1
+            apt-get update -qq &&
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip >/dev/null
+            bash .circleci/gcp_deploy.sh
 
 workflows:
   version: 2
@@ -225,18 +164,13 @@ workflows:
       - lint
       - test
       - health_check
-      - terraform_fmt_validate:
+      - validate_infra
+      - deploy_gcp:
           requires:
             - lint
             - test
             - health_check
-      - terraform_plan:
-          requires:
-            - terraform_fmt_validate
-      - terraform_apply:
-          requires:
-            - terraform_plan
+            - validate_infra
           filters:
             branches:
-              only:
-                - hw3
+              only: main

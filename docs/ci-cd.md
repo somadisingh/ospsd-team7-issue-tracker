@@ -65,6 +65,12 @@ If these are not set, e2e tests are skipped.
 
 ---
 
+## GCP deploy on `main`
+
+When **lint**, **test**, **health_check**, and **validate_infra** succeed on branch **`main`**, CircleCI runs **`deploy_gcp`**. Enable it with **`GCP_CI_DEPLOY=1`**, **`GCP_SA_KEY_JSON_B64`**, and **`GCP_PROJECT_ID`**. Full numbered setup (service account, state bucket, **`terraform init -migrate-state`**, CircleCI variables) is documented in **`infrastructure/terraform/README.md`** under **Automate deploys on `main`**. Set **`GCP_TERRAFORM_STATE_BUCKET`** after migrating state to enable **`terraform apply`** on each deploy.
+
+---
+
 ## Local Parity
 
 To reproduce the CI pipeline locally:

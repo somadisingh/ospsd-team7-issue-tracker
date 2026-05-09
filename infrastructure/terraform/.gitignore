@@ -1,0 +1,8 @@
+.terraform/
+crash.log
+*.tfstate
+*.tfstate.*
+secrets.tfvars
+*-secrets.tfvars
+override.tf
+override.tf.json

@@ -1,55 +1,297 @@
 locals {
-  base_env_vars = {
-    DATABASE_URL = {
-      value = render_postgres.issue_tracker_db.connection_info.internal_connection_string
-    }
-    OTEL_SERVICE_NAME = {
-      value = var.otel_service_name
-    }
-    TRELLO_CALLBACK_URL = {
-      value = var.trello_callback_url
-    }
-    AI_ALLOW_MUTATIONS = {
-      value = tostring(var.ai_allow_mutations)
-    }
-    OTEL_SDK_DISABLED = {
-      value = tostring(var.otel_sdk_disabled)
-    }
-  }
+  manage_tf = var.manage_secret_versions_in_terraform
 
-  optional_env_vars = merge(
-    var.trello_api_key != null ? { TRELLO_API_KEY = { value = var.trello_api_key } } : {},
-    var.trello_api_secret != null ? { TRELLO_API_SECRET = { value = var.trello_api_secret } } : {},
-    var.anthropic_api_key != null ? { ANTHROPIC_API_KEY = { value = var.anthropic_api_key } } : {},
-    var.otel_exporter_otlp_endpoint != null ? { OTEL_EXPORTER_OTLP_ENDPOINT = { value = var.otel_exporter_otlp_endpoint } } : {},
-    var.otel_exporter_otlp_headers != null ? { OTEL_EXPORTER_OTLP_HEADERS = { value = var.otel_exporter_otlp_headers } } : {}
+  image_digest = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_repository_id}/${var.image_name}:${var.image_tag}"
+
+  use_anthropic = local.manage_tf ? (trimspace(var.anthropic_api_key) != "") : var.provision_anthropic_secret_shell
+
+  use_otlp_headers = local.manage_tf ? (trimspace(var.otel_exporter_otlp_headers) != "") : var.provision_otlp_headers_secret_shell
+
+  version_database = local.manage_tf ? 1 : 0
+  version_trello   = local.manage_tf ? 1 : 0
+
+  version_anthropic = (local.manage_tf && local.use_anthropic) ? 1 : 0
+
+  version_otlp = (local.manage_tf && local.use_otlp_headers) ? 1 : 0
+
+  plain_env_pairs = merge(
+    {
+      OTEL_SERVICE_NAME  = var.otel_service_name
+      OTEL_SDK_DISABLED  = "false"
+      AI_ALLOW_MUTATIONS = var.ai_allow_mutations ? "true" : "false"
+      SKIP_ALEMBIC       = var.skip_alembic ? "true" : "false"
+    },
+    var.otel_exporter_otlp_endpoint != "" ? {
+      OTEL_EXPORTER_OTLP_ENDPOINT = var.otel_exporter_otlp_endpoint
+      OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
+    } : {},
+    trimspace(var.trello_callback_url) != "" ? {
+      TRELLO_CALLBACK_URL = trimspace(var.trello_callback_url)
+    } : {},
   )
+
+  secret_env_bindings = concat(
+    [
+      { name = "DATABASE_URL", secret = google_secret_manager_secret.database_url.secret_id },
+      { name = "TRELLO_API_KEY", secret = google_secret_manager_secret.trello_api_key.secret_id },
+      { name = "TRELLO_API_SECRET", secret = google_secret_manager_secret.trello_api_secret.secret_id },
+    ],
+    local.use_anthropic ? [{
+      name   = "ANTHROPIC_API_KEY"
+      secret = google_secret_manager_secret.anthropic[0].secret_id
+    }] : [],
+    local.use_otlp_headers ? [{
+      name   = "OTEL_EXPORTER_OTLP_HEADERS"
+      secret = google_secret_manager_secret.otlp_headers[0].secret_id
+    }] : [],
+  )
+
+  # IAM keys must not be derived from booleans tied to sensitive variables (those taint entire for_each).
+  accessor_secret_ids = toset(concat(
+    [
+      google_secret_manager_secret.database_url.secret_id,
+      google_secret_manager_secret.trello_api_key.secret_id,
+      google_secret_manager_secret.trello_api_secret.secret_id,
+    ],
+    google_secret_manager_secret.anthropic[*].secret_id,
+    google_secret_manager_secret.otlp_headers[*].secret_id,
+  ))
 }
 
-resource "render_postgres" "issue_tracker_db" {
-  name         = var.database_name
-  plan         = var.postgres_plan
-  region       = var.region
-  version      = var.postgres_version
-  disk_size_gb = var.postgres_disk_size_gb
+locals {
+  enable_apis = [
+    "run.googleapis.com",
+    "artifactregistry.googleapis.com",
+    "secretmanager.googleapis.com",
+    "iam.googleapis.com",
+  ]
 }
 
-resource "render_web_service" "issue_tracker_service" {
-  name              = var.service_name
-  plan              = var.service_plan
-  region            = var.region
-  health_check_path = "/health"
-  start_command     = "uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port $PORT"
+resource "google_project_service" "enabled" {
+  for_each = toset(local.enable_apis)
 
-  runtime_source = {
-    native_runtime = {
-      runtime       = "python"
-      repo_url      = var.repo_url
-      branch        = var.git_branch
-      auto_deploy   = true
-      build_command = "pip install uv && uv sync --all-extras"
+  project                    = var.project_id
+  service                    = each.key
+  disable_dependent_services = false
+  disable_on_destroy         = false
+}
+
+resource "google_service_account" "issue_tracker" {
+  account_id   = "issue-tracker-run"
+  display_name = "Issue tracker Cloud Run"
+  depends_on   = [google_project_service.enabled]
+}
+
+resource "google_artifact_registry_repository" "docker" {
+  location        = var.region
+  repository_id   = var.artifact_repository_id
+  description     = "Issue tracker Docker images"
+  format          = "DOCKER"
+  depends_on      = [google_project_service.enabled]
+}
+
+resource "google_secret_manager_secret" "database_url" {
+  secret_id = "${var.secret_name_prefix}-database-url"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.enabled]
+}
+
+resource "google_secret_manager_secret_version" "database_url" {
+  count = local.version_database
+
+  secret      = google_secret_manager_secret.database_url.id
+  secret_data = var.database_url
+
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
+}
+
+resource "google_secret_manager_secret" "trello_api_key" {
+  secret_id = "${var.secret_name_prefix}-trello-api-key"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.enabled]
+}
+
+resource "google_secret_manager_secret_version" "trello_api_key" {
+  count = local.version_trello
+
+  secret      = google_secret_manager_secret.trello_api_key.id
+  secret_data = var.trello_api_key
+
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
+}
+
+resource "google_secret_manager_secret" "trello_api_secret" {
+  secret_id = "${var.secret_name_prefix}-trello-api-secret"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.enabled]
+}
+
+resource "google_secret_manager_secret_version" "trello_api_secret" {
+  count = local.version_trello
+
+  secret      = google_secret_manager_secret.trello_api_secret.id
+  secret_data = var.trello_api_secret
+
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
+}
+
+resource "google_secret_manager_secret" "anthropic" {
+  count     = local.use_anthropic ? 1 : 0
+  secret_id = "${var.secret_name_prefix}-anthropic-api-key"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.enabled]
+}
+
+resource "google_secret_manager_secret_version" "anthropic" {
+  count = local.version_anthropic
+
+  secret      = google_secret_manager_secret.anthropic[count.index].id
+  secret_data = var.anthropic_api_key
+
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
+}
+
+resource "google_secret_manager_secret" "otlp_headers" {
+  count     = local.use_otlp_headers ? 1 : 0
+  secret_id = "${var.secret_name_prefix}-otlp-headers"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.enabled]
+}
+
+resource "google_secret_manager_secret_version" "otlp_headers" {
+  count = local.version_otlp
+
+  secret      = google_secret_manager_secret.otlp_headers[count.index].id
+  secret_data = var.otel_exporter_otlp_headers
+
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
+}
+
+resource "google_secret_manager_secret_iam_member" "run_accessor" {
+  for_each = local.accessor_secret_ids
+
+  project   = var.project_id
+  secret_id = each.value
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.issue_tracker.email}"
+}
+
+resource "google_cloud_run_v2_service" "issue_tracker" {
+  count = var.deploy_cloud_run_service ? 1 : 0
+
+  name                  = var.cloud_run_service_name
+  location              = var.region
+  ingress               = "INGRESS_TRAFFIC_ALL"
+  deletion_protection   = var.cloud_run_deletion_protection
+
+  template {
+    service_account                  = google_service_account.issue_tracker.email
+    timeout                          = "600s"
+    max_instance_request_concurrency = 80
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 5
+    }
+
+    containers {
+      image = local.image_digest
+
+      ports {
+        container_port = 8080
+      }
+
+      resources {
+        limits = {
+          cpu    = "1"
+          memory = "512Mi"
+        }
+      }
+
+      startup_probe {
+        failure_threshold     = 12
+        initial_delay_seconds = 15
+        period_seconds        = 10
+        timeout_seconds       = 3
+
+        http_get {
+          path = "/health"
+          port = 8080
+        }
+      }
+
+      dynamic "env" {
+        for_each = local.plain_env_pairs
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+
+      dynamic "env" {
+        for_each = { for b in local.secret_env_bindings : b.name => b.secret }
+        content {
+          name = env.key
+          value_source {
+            secret_key_ref {
+              secret  = env.value
+              version = "latest"
+            }
+          }
+        }
+      }
     }
   }
 
-  env_vars = merge(local.base_env_vars, local.optional_env_vars)
+  traffic {
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
+  }
+
+  depends_on = [
+    google_artifact_registry_repository.docker,
+    google_secret_manager_secret_iam_member.run_accessor,
+  ]
+}
+
+resource "google_cloud_run_v2_service_iam_member" "public_invoker" {
+  count = var.deploy_cloud_run_service ? 1 : 0
+
+  project  = var.project_id
+  location = google_cloud_run_v2_service.issue_tracker[0].location
+  name     = google_cloud_run_v2_service.issue_tracker[0].name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+
+  depends_on = [google_cloud_run_v2_service.issue_tracker]
 }
