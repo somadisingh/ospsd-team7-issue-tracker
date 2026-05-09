@@ -83,11 +83,11 @@ resource "google_service_account" "issue_tracker" {
 }
 
 resource "google_artifact_registry_repository" "docker" {
-  location        = var.region
-  repository_id   = var.artifact_repository_id
-  description     = "Issue tracker Docker images"
-  format          = "DOCKER"
-  depends_on      = [google_project_service.enabled]
+  location      = var.region
+  repository_id = var.artifact_repository_id
+  description   = "Issue tracker Docker images"
+  format        = "DOCKER"
+  depends_on    = [google_project_service.enabled]
 }
 
 resource "google_secret_manager_secret" "database_url" {
@@ -209,10 +209,10 @@ resource "google_secret_manager_secret_iam_member" "run_accessor" {
 resource "google_cloud_run_v2_service" "issue_tracker" {
   count = var.deploy_cloud_run_service ? 1 : 0
 
-  name                  = var.cloud_run_service_name
-  location              = var.region
-  ingress               = "INGRESS_TRAFFIC_ALL"
-  deletion_protection   = var.cloud_run_deletion_protection
+  name                = var.cloud_run_service_name
+  location            = var.region
+  ingress             = "INGRESS_TRAFFIC_ALL"
+  deletion_protection = var.cloud_run_deletion_protection
 
   template {
     service_account                  = google_service_account.issue_tracker.email
