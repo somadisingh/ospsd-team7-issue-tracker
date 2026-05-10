@@ -245,7 +245,155 @@ That's the rubric §5 "transparent swap" requirement, demonstrated.
 
 ---
 
-## 6. Where to look in the codebase
+## 6. Combined demo — Trello + Slack from the SPA
+
+The AI tool catalogue exposes **both** the issue-tracker tools (`list_boards`,
+`create_issue`, `update_issue_status`, …) **and** the chat tools
+(`list_channels`, `send_chat_message`, …). They're usable in the same
+prompt because `ClaudeAIClient` runs a tool-use loop until the model
+says "done" (up to `AI_MAX_TOOL_HOPS=6`). This is what makes the
+end-to-end demo possible from a single chat box.
+
+### Setup
+
+Three windows / tabs visible at once:
+
+| Window           | Purpose                                  | URL                                       |
+| ---------------- | ---------------------------------------- | ----------------------------------------- |
+| Browser tab A    | The Next.js SPA, signed in via Trello    | `http://localhost:3000`                   |
+| Browser tab B    | A Trello board you'll watch update       | `https://trello.com/b/<your-board-id>`    |
+| Slack workspace  | The channel the bot was `/invite`d to    | `#new-channel` (or yours)                 |
+
+Backend running with `CHAT_BACKEND=slack` (§3).
+
+In tab A, click a board on the **left** so the AI knows which board
+"this board" refers to.
+
+### Act 1 — Read Trello (sanity check)
+
+In the SPA's right-hand chat panel, type:
+
+> *List the issues on this board.*
+
+Action log should be `list_issues`. Switch to tab B and confirm the
+issues match — the AI sees real Trello state.
+
+### Act 2 — Cross-vertical: one prompt, two backends
+
+> *Create an issue titled "fix login redirect bug" on this board, then post a message in #new-channel announcing the new issue with its title and id.*
+
+Action log should be:
+
+```text
+✓ create_issue
+✓ list_channels        (or get_channel)
+✓ send_chat_message
+```
+
+Watch in this order:
+
+1. **Right pane** — the action log appears with three green ticks.
+2. **Left pane** — board browser auto-refreshes; the new card appears
+   (this is the `MUTATING_TOOLS` watcher in `AIChat.tsx:47`).
+3. **Trello tab B** — refresh; same card with the right title.
+4. **Slack** — bot has posted *"📌 New issue created: fix login redirect bug (id: …)"*.
+
+Three windows, one prompt, two verticals touched, all DI-wired.
+
+### Act 3 — Status change with audit trail
+
+> *Move that issue to in_progress, and post the status change to #new-channel as if you were a CI bot.*
+
+Action log:
+
+```text
+✓ list_issues             (resolves the id we just made)
+✓ update_issue_status
+✓ send_chat_message
+```
+
+Trello card moves to "In Progress"; Slack gets a CI-style notification.
+
+### Act 4 — Read-back from Slack
+
+Closing the loop the other direction:
+
+> *Read the last 3 messages in #new-channel and tell me what changed.*
+
+Action log:
+
+```text
+✓ list_channels
+✓ get_recent_messages
+```
+
+The reply summarises the two announcements you just posted. The AI is
+now using Slack as an external memory.
+
+### Act 5 — One-line "transparent swap"
+
+Stop uvicorn. Restart with the local backend (§5) and re-run *Act 4*.
+The reply now references seeded fake channels (`general`, `dev`,
+`random`) instead of your real Slack ones. **No frontend, AI, or route
+code changed.** Switch back to slack to continue.
+
+---
+
+## 7. Capabilities — what the bot can and can't do
+
+### The 4 chat tools the AI can call
+
+Registered in `claude_ai_client_impl/tools.py:306-330`. The AI may call
+any of these in any order, in any combination, in a single prompt.
+
+| Tool                  | Slack API call          | Effect                                      |
+| --------------------- | ----------------------- | ------------------------------------------- |
+| `list_channels`       | `conversations.list`    | All channels visible to the bot              |
+| `get_channel`         | `conversations.info`    | One channel's name + ID + privacy            |
+| `get_recent_messages` | `conversations.history` | Last N (≤50) messages from a channel         |
+| `send_chat_message`   | `chat.postMessage`      | Posts a new message to a channel             |
+
+### Deliberately NOT exposed
+
+| Method on Team 9's `SlackClient` | Why hidden                                                                |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `delete_message`                 | Hard rule in `tools.py:12` — **"No `delete_*` tools."**                    |
+| `get_message`                    | Redundant with `get_recent_messages`; not interesting for tool use         |
+
+### Slack-side limits (would need new code)
+
+The integration is **outbound only**: the AI calls Slack. Slack does
+not call us. So the following do **not** work and are out of scope:
+
+- **Receive messages.** No Slack Events API subscription. Typing in
+  Slack does not trigger anything on our backend.
+- **Slash commands.** No `/issue create …` from inside Slack. No
+  webhook endpoint listens for them.
+- **DM the bot.** Disabled by default for new Slack apps; the
+  "Sending messages to this app has been turned off" notice is from
+  Slack, not us.
+- **`@mentions` of the bot.** Same reason — no Events API listener.
+- **Edit / delete its own posts.** `chat.update` isn't wrapped by
+  Team 9's `SlackClient`; `chat.delete` is wrapped but not exposed.
+- **Threads.** `chat.postMessage` in their wrapper doesn't take
+  `thread_ts`.
+- **Reactions, file uploads, user lookup by name.** None of these
+  exist in Team 9's published surface.
+
+Net effect: think of Slack here as a **write-mostly audit and
+notification channel** that the AI also occasionally reads from. To
+make Slack drive the issue tracker (slash commands, mentions) you'd
+need to add a separate inbound webhook on the FastAPI side — that's
+not what HW3 §5 is asking for, so we haven't built it.
+
+```text
+What HW3 §5 requires:    Trello service ──► Slack         ✅  (we have this)
+What it does NOT require: Trello service ◄── Slack        (would need an inbound webhook)
+```
+
+---
+
+## 8. Where to look in the codebase
 
 | Concern                                        | File                                                                                       |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
@@ -259,7 +407,7 @@ That's the rubric §5 "transparent swap" requirement, demonstrated.
 
 ---
 
-## 7. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom                                        | Cause / fix                                                                       |
 | ---------------------------------------------- | --------------------------------------------------------------------------------- |
