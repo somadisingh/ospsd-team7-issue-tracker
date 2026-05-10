@@ -13,6 +13,7 @@ This project provides:
 - **`issue_tracker_adapter`** — Service client adapter that implements the `Client` ABC by delegating to the auto-generated HTTP client
 - **`ai_client_api`** *(HW3)* — Provider-agnostic ABC for an AI assistant, plus prompt sanitization helpers
 - **`claude_ai_client_impl`** *(HW3)* — Concrete Anthropic Claude implementation with a tool-calling loop and safety-gated tool catalogue
+- **`chat_client_impl`** — Local in-memory chat client implementation that uses the shared `chat-client-api` contract from GitHub
 
 The design supports dependency injection: implementations register at import time, and consumers use a single factory (`get_client`) to obtain the configured client — whether it talks to Trello directly or through the deployed service. The AI integration follows the exact same pattern (see [AI Integration](ai-integration.md)).
 
@@ -72,7 +73,8 @@ ospsd-team-07/
 │   ├── issue_tracker_service_api_client/  # Auto-generated HTTP client (openapi-python-client)
 │   ├── issue_tracker_adapter/             # Service client adapter (Client ABC → HTTP client)
 │   ├── ai_client_api/                     # HW3: AIClient ABC + sanitizer + types
-│   └── claude_ai_client_impl/             # HW3: Anthropic Claude implementation + tool catalogue
+│   ├── claude_ai_client_impl/             # HW3: Anthropic Claude implementation + tool catalogue
+│   └── chat_client_impl/                  # Local chat client implementation
 ├── tests/
 │   ├── integration/                       # DI and interface compliance
 │   └── e2e/                               # Full workflow with real API
@@ -91,5 +93,6 @@ ospsd-team-07/
 | [Trello Client Implementation](api/trello_client_impl.md) | Trello implementation reference |
 | [FastAPI Service](api/issue_tracker_service.md) | REST API endpoints, `/ai/*` routes, and auth flow |
 | [Service Client Adapter](api/issue_tracker_adapter.md) | Adapter component reference |
+| [Chat Client API](api/chat_client_api.md) | Shared chat contract and local implementation |
 | [Code Quality](code-quality.md) | Ruff, mypy, and linting guidelines |
 | [CI/CD](ci-cd.md) | CircleCI pipeline, environment variables, Render deploy hook |
