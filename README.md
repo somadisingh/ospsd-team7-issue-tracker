@@ -35,6 +35,7 @@ The project is a `uv` workspace containing five packages:
 3. **`issue_tracker_service`**: A FastAPI application that wraps the Trello client behind REST endpoints with OAuth 1.0a authentication. Deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com).
 4. **`issue_tracker_service_api_client`**: An auto-generated Python HTTP client created from the FastAPI service's OpenAPI specification using `openapi-python-client`.
 5. **`issue_tracker_adapter`**: A service client adapter that implements the `Client` ABC by delegating to the auto-generated HTTP client, achieving location transparency.
+6. **`chat_client_impl`**: A local in-memory chat client implementation that uses the shared `chat-client-api` contract from GitHub.
 
 ## Project Structure
 
@@ -45,7 +46,8 @@ ospsd-team-07/
 │   ├── trello_client_impl/                  # Direct Trello implementation
 │   ├── issue_tracker_service/               # FastAPI service (OAuth + REST)
 │   ├── issue_tracker_service_api_client/    # Auto-generated HTTP client
-│   └── issue_tracker_adapter/               # Service client adapter
+│   ├── issue_tracker_adapter/               # Service client adapter
+│   └── chat_client_impl/                    # Local chat client implementation
 ├── tests/                                   # Integration and E2E tests
 │   ├── integration/                         # Component integration tests
 │   └── e2e/                                 # End-to-end tests (real Trello API)

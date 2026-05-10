@@ -9,7 +9,8 @@ import time
 from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
-from opentelemetry import metrics, trace
+from opentelemetry import metrics as metrics  # re-exported for tests
+from opentelemetry import trace as trace  # re-exported for tests
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor

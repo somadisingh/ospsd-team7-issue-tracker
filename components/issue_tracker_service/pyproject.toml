@@ -20,6 +20,11 @@ dependencies = [
     "psycopg[binary]>=3.2.0",
     "issue-tracker-client-api",
     "issue-tracker-client-impl",
+    "ai-client-api",
+    "claude-ai-client-impl",
+    "chat-client-api",
+    "chat-client-impl",
+    "slack-client-impl",
 ]
 
 [build-system]
@@ -35,3 +40,8 @@ line-length = 120
 [tool.uv.sources]
 issue-tracker-client-api = { workspace = true }
 issue-tracker-client-impl = { workspace = true }
+ai-client-api = { workspace = true }
+claude-ai-client-impl = { workspace = true }
+chat-client-impl = { workspace = true }
+chat-client-api = { git = "https://github.com/HarshithKoriRaj/Shared-API", rev = "main" }
+slack-client-impl = { git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source", rev = "91eedf88e6823e1f924cbeb05c6a74aa0a524b34", subdirectory = "components/slack_client_impl" }

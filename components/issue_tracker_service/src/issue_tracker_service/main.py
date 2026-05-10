@@ -7,6 +7,7 @@ internal List and Member endpoints.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Dict, List, Optional
@@ -14,8 +15,8 @@ from typing import Dict, List, Optional
 import issue_tracker_client_api
 from api.issue import Status
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
 from issue_tracker_client_api.exceptions import (
     AuthenticationError,
     IssueTrackerError,
@@ -23,6 +24,7 @@ from issue_tracker_client_api.exceptions import (
     ServiceUnavailableError,
 )
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from trello_client_impl.client import TrelloClient
 
@@ -42,12 +44,35 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="Issue Tracker Service",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
+)
+
+# Allow the deployed frontend (and local dev server) to call us. The
+# actual origins list is read from CORS_ALLOW_ORIGINS (comma-separated);
+# we default to the local Next.js dev host so `npm run dev` works.
+_cors_origins = [
+    origin.strip() for origin in os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000").split(",") if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 app.include_router(health_router)
 app.include_router(auth_router)
+# AI router is included lazily so tests that don't need it don't force-import
+# the Anthropic SDK.
+try:  # pragma: no cover - exercised via integration tests
+    from .routes.ai import router as ai_router
+
+    app.include_router(ai_router)
+except ImportError as _ai_import_err:  # pragma: no cover
+    logger.warning("AI router not loaded: %s", _ai_import_err)
 
 # ------------------------------------------------------------------ #
 # Exception handlers
