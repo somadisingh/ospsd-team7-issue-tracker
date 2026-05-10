@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from chat_client_api import (
     Channel,
@@ -23,7 +23,7 @@ class LocalChatClient(ChatClient):
 
     def send_message(self, channel_id: str, text: str) -> Message:
         """Send a message to the provided channel ID and store it in memory."""
-        now = datetime.now(datetime.UTC)
+        now = datetime.now(timezone.utc)
         message_id = f"{channel_id}:{now.isoformat()}"
 
         message = Message(
