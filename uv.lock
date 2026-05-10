@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 [manifest]
 members = [
     "ai-client-api",
+    "chat-client-impl",
     "claude-ai-client-impl",
     "issue-tracker-adapter",
     "issue-tracker-client-api",
@@ -185,7 +186,29 @@ wheels = [
 [[package]]
 name = "chat-client-api"
 version = "0.1.0"
-source = { git = "https://github.com/HarshithKoriRaj/Shared-API?rev=main#1036a6e9ac40f3b209cfc35abdd8cc9561965cc1" }
+source = { git = "https://github.com/HarshithKoriRaj/Shared-API.git?rev=main#1036a6e9ac40f3b209cfc35abdd8cc9561965cc1" }
+
+[[package]]
+name = "chat-client-impl"
+version = "0.1.0"
+source = { editable = "components/chat_client_impl" }
+dependencies = [
+    { name = "chat-client-api" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-cov" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "chat-client-api", git = "https://github.com/HarshithKoriRaj/Shared-API.git?rev=main" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "claude-ai-client-impl"
@@ -1021,6 +1044,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "ai-client-api" },
     { name = "chat-client-api" },
+    { name = "chat-client-impl" },
     { name = "claude-ai-client-impl" },
     { name = "issue-tracker-adapter" },
     { name = "issue-tracker-service" },
@@ -1052,6 +1076,7 @@ dev = [
 requires-dist = [
     { name = "ai-client-api", editable = "components/ai_client_api" },
     { name = "chat-client-api", git = "https://github.com/HarshithKoriRaj/Shared-API?rev=main" },
+    { name = "chat-client-impl", editable = "components/chat_client_impl" },
     { name = "claude-ai-client-impl", editable = "components/claude_ai_client_impl" },
     { name = "issue-tracker-adapter", editable = "components/issue_tracker_adapter" },
     { name = "issue-tracker-service", editable = "components/issue_tracker_service" },
