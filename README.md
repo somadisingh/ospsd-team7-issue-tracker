@@ -246,22 +246,25 @@ On **Cloud Run**, move traffic back to an earlier revision in the console or via
 
 ### Monitoring & Observability
 
-The service is instrumented with **OpenTelemetry** for distributed tracing and HTTP metrics. The `telemetry.py` module auto-instruments FastAPI endpoints and the `requests` library (used for Trello API calls).
+The service supports **Prometheus + Grafana** and optional **OpenTelemetry OTLP export**:
 
-**What is collected:**
+- Prometheus scrape endpoint: `GET /metrics`
+- Prometheus metrics from middleware:
+  - `issue_tracker_http_request_duration_seconds` (histogram)
+  - `issue_tracker_http_requests_total` (counter)
+  - `issue_tracker_http_request_outcomes_total` (counter with `outcome` and `failure_kind`)
+- OTel metrics/traces (when enabled): `http.server.request.duration` and `http.server.responses` with route/method/status attributes
 
-- Request duration histograms (`http.server.duration`) with route and status code attributes
-- Trace spans for all HTTP requests (including outbound Trello API calls)
-- Custom HTTP metrics middleware for success/failure rate tracking
+Required labels for rubric KPIs are included (`route`, `method`, `status`), plus failure classification (`domain` vs `infrastructure`) on the outcomes counter.
 
-**To enable telemetry export in production:**
+For local dashboard setup, use `infrastructure/monitoring/docker-compose.yml` and `infrastructure/monitoring/prometheus.yml`. Grafana auto-provisions the Prometheus datasource and prebuilt dashboard from `infrastructure/monitoring/grafana/dashboards/issue-tracker-kpis.json`.
 
-Set the OTLP exporter variables in Terraform (`otel_exporter_otlp_*`) — see [`.env.example`](.env.example).
+```bash
+cd infrastructure/monitoring
+docker compose up -d
+```
 
-- `OTEL_EXPORTER_OTLP_ENDPOINT` — your OTLP-compatible backend URL
-- `OTEL_EXPORTER_OTLP_HEADERS` — authentication headers for the backend
-
-Telemetry is disabled when `OTEL_SDK_DISABLED=true` (used in CI and local development).
+Then open Grafana at `http://localhost:3000` (`admin` / `admin`) and load **Issue Tracker KPI Dashboard**. For production OTLP export (Grafana Cloud, Datadog, etc.), set OTLP variables in Terraform and keep `OTEL_SDK_DISABLED=false`.
 
 ### E2E Testing
 

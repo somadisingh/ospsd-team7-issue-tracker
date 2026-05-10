@@ -8,7 +8,7 @@
 
 - **HTTP API:** Exposes all `Client` operations as REST endpoints (boards, lists, issues, members).
 - **OAuth 1.0a:** Provides `/auth/login` and `/auth/callback` endpoints for the Trello OAuth flow, issuing server-side session tokens.
-- **Health check:** `GET /health` returns `{"status": "ok"}` for liveness probes.
+- **Health check:** `GET /health` returns `200` with JSON status (and DB connectivity when configured).
 - **Dependency injection:** Uses FastAPI's `Depends()` to inject an authenticated `TrelloClient` into every endpoint handler.
 
 ## Architecture
@@ -54,19 +54,27 @@ Browser/Client
 | `DATABASE_URL`        | Yes      | SQLAlchemy URL (e.g. Postgres/Supabase or local SQLite/Postgres)      |
 | `TRELLO_CALLBACK_URL` | No       | OAuth callback URL (defaults to `http://localhost:8000/auth/callback`) |
 
-### OpenTelemetry (course: latency, success vs failure)
+### Telemetry (Prometheus + optional OpenTelemetry)
 
-The service exports **OTLP/HTTP** traces and **HTTP metrics** when endpoints and optional headers are set. See repository **`.env.example`**.
+The service always exposes Prometheus metrics at **`GET /metrics`** (disable with `PROMETHEUS_METRICS_ENABLED=false`) and can also export OTLP traces/metrics when OTLP variables are set. See repository **`.env.example`**.
 
 | Variable | Role |
 | -------- | ---- |
-| `OTEL_SERVICE_NAME` | Logical service name in the backend (default: `issue-tracker-service`). |
+| `PROMETHEUS_METRICS_ENABLED` | Enables `/metrics` scrape endpoint (default `true`). |
+| `OTEL_SERVICE_NAME` | Logical service name in OTLP backend (default: `issue-tracker-service`). |
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Full URL to `.../v1/traces` (or set `OTEL_EXPORTER_OTLP_ENDPOINT` base; see `.env.example`). |
 | `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | Full URL to `.../v1/metrics` (optional if derived from traces URL). |
 | `OTEL_EXPORTER_OTLP_HEADERS` | Comma-separated `Key=Value` auth headers for your vendor. |
 | `OTEL_SDK_DISABLED` | Set to `true` for local/CI when you are not sending data to a collector. |
 
-**Metrics emitted (for dashboards):** `http.server.request.duration` (seconds), `http.server.responses` (count) with labels `http.method`, `http.route` (template/low-cardinality), and `status.class` (`200`, `400`, `500`, …) for success vs error rate.
+**Prometheus metrics emitted (for dashboards):**
+- `issue_tracker_http_request_duration_seconds` with labels `method`, `route`, `status`
+- `issue_tracker_http_requests_total` with labels `method`, `route`, `status`
+- `issue_tracker_http_request_outcomes_total` with labels `method`, `route`, `status`, `outcome`, `failure_kind`
+
+`failure_kind` values are `domain` for 4xx and `infrastructure` for 5xx; success responses use `none`.
+
+Prebuilt Grafana dashboard JSON is available at `infrastructure/monitoring/grafana/dashboards/issue-tracker-kpis.json`, with provisioning config in `infrastructure/monitoring/grafana/provisioning/`.
 
 On **Cloud Run**, **`docker-entrypoint.sh`** runs **`alembic upgrade head`** before **uvicorn** (override with **`SKIP_ALEMBIC=true`** only for debugging). Locally, from repo root: `uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head`.
 
