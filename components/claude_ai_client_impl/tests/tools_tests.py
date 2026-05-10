@@ -6,13 +6,13 @@ from unittest.mock import MagicMock
 
 import pytest
 from ai_client_api.exceptions import AIToolError
-from claude_ai_client_impl.mock_chat import MockChatClient
+from chat_client_impl import LocalChatClient
 from claude_ai_client_impl.tools import ToolDispatcher
 
 
 @pytest.fixture
 def dispatcher_rw(
-    mock_issue_tracker: MagicMock, mock_chat: MockChatClient
+    mock_issue_tracker: MagicMock, mock_chat: LocalChatClient
 ) -> ToolDispatcher:
     return ToolDispatcher(
         issue_tracker=mock_issue_tracker,
@@ -23,7 +23,7 @@ def dispatcher_rw(
 
 @pytest.fixture
 def dispatcher_ro(
-    mock_issue_tracker: MagicMock, mock_chat: MockChatClient
+    mock_issue_tracker: MagicMock, mock_chat: LocalChatClient
 ) -> ToolDispatcher:
     return ToolDispatcher(
         issue_tracker=mock_issue_tracker,
@@ -148,7 +148,7 @@ class TestDispatch:
     def test_send_chat_message_writes_to_mock_chat(
         self,
         dispatcher_rw: ToolDispatcher,
-        mock_chat: MockChatClient,
+        mock_chat: LocalChatClient,
     ) -> None:
         before = len(mock_chat.get_messages("C0123ENG", limit=50))
         dispatcher_rw.dispatch(

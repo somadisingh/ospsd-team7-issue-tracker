@@ -14,6 +14,7 @@ dependencies = [
     "claude-ai-client-impl",
     "chat-client-api",
     "chat-client-impl",
+    "slack-client-impl",
 ]
 
 [tool.uv.sources]
@@ -25,6 +26,11 @@ claude-ai-client-impl = { workspace = true }
 ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git", rev = "tct297/add-uv" }
 chat-client-impl = { workspace = true }
 chat-client-api = { git = "https://github.com/HarshithKoriRaj/Shared-API", rev = "main" }
+# Cross-vertical (HW3 §5): Team 9's published Slack ChatClient, pulled via
+# uv subdirectory pin so we install ONLY their slack_client_impl package and
+# none of their other workspace components (chat_client_service, openai_ai_client_impl,
+# ticket_client_impl, etc.).
+slack-client-impl = { git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source", rev = "91eedf88e6823e1f924cbeb05c6a74aa0a524b34", subdirectory = "components/slack_client_impl" }
 
 [project.optional-dependencies]
 dev = [
@@ -42,6 +48,15 @@ dev = [
 
 [tool.uv.workspace]
 members = ["components/*"]
+
+# Force Team 9's slack-client-impl to resolve `chat-client-api` against the
+# canonical Shared-API repo, NOT against the divergent workspace copy that
+# ships in their CS-GY-9223-Open-Source repo. Without this override, uv
+# refuses to resolve because two URLs claim the same package.
+[tool.uv]
+override-dependencies = [
+    "chat-client-api @ git+https://github.com/HarshithKoriRaj/Shared-API.git@main",
+]
 
 [tool.ruff]
 line-length = 88
@@ -124,6 +139,12 @@ ignore = [
   "PERF401", # Loop is clearer than comprehension for block filtering
   "N801",    # Nested "messages" class inside FakeAnthropic mirrors SDK shape
 ]
+# Chat client impl: in-memory fake + Slack adapter for Team 9
+"components/chat_client_impl/src/**/*.py" = [
+  "D102",    # Missing method docstring — implementation follows the ABC docs
+  "D107",    # Missing __init__ docstring — dataclass / wiring class
+  "TRY003",  # Long exception messages — user-facing context for chat errors
+]
 # Conftest: pytest configuration
 "conftest.py" = [
   "ANN001",  # config arg — pytest hook parameter
@@ -134,7 +155,7 @@ ignore = [
 [tool.mypy]
 strict = true
 explicit_package_bases = true  # Required for src layout
-mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src", "components/issue_tracker_service/src", "components/issue_tracker_adapter/src", "components/issue_tracker_service_api_client", "components/ai_client_api/src", "components/claude_ai_client_impl/src"]
+mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src", "components/issue_tracker_service/src", "components/issue_tracker_adapter/src", "components/issue_tracker_service_api_client", "components/ai_client_api/src", "components/claude_ai_client_impl/src", "components/chat_client_impl/src"]
 ignore_missing_imports = false
 warn_unused_ignores = false
 show_error_codes = true
@@ -161,6 +182,20 @@ module = "chat_client_api.*"
 ignore_missing_imports = true
 follow_imports = "skip"
 disable_error_code = ["import-untyped"]
+
+# Team 9's slack_client_impl is external code (HW3 rubric §2 explicitly
+# allows excluding other teams' code from type checks). Their workspace ABC
+# diverges slightly from the Shared-API we pin (timestamp: str vs datetime),
+# so following its imports would surface false errors on our side.
+[[tool.mypy.overrides]]
+module = "slack_client_impl.*"
+ignore_missing_imports = true
+follow_imports = "skip"
+disable_error_code = ["import-untyped"]
+
+[[tool.mypy.overrides]]
+module = "slack_sdk.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 pythonpath = [

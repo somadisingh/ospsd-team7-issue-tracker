@@ -1,11 +1,12 @@
 [project]
 name = "chat-client-impl"
 version = "0.1.0"
-description = "Local in-memory implementation of the ChatClient API"
+description = "Local in-memory ChatClient + interop adapters for external chat impls"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "chat-client-api",
+    "slack-client-impl",
 ]
 
 [project.optional-dependencies]
@@ -23,3 +24,4 @@ packages = ["src/chat_client_impl"]
 
 [tool.uv.sources]
 chat-client-api = { git = "https://github.com/HarshithKoriRaj/Shared-API.git", rev = "main" }
+slack-client-impl = { git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source", rev = "91eedf88e6823e1f924cbeb05c6a74aa0a524b34", subdirectory = "components/slack_client_impl" }

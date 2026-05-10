@@ -7,15 +7,15 @@ from unittest.mock import MagicMock
 
 import pytest
 from ai_client_api.exceptions import AIProviderError, AIUnsafeRequestError
+from chat_client_impl import LocalChatClient
 from claude_ai_client_impl.client import ClaudeAIClient
 from claude_ai_client_impl.config import ClaudeConfig
-from claude_ai_client_impl.mock_chat import MockChatClient
 
 
 @pytest.fixture
 def make_client(
     mock_issue_tracker: MagicMock,
-    mock_chat: MockChatClient,
+    mock_chat: LocalChatClient,
     default_config: ClaudeConfig,
 ):
     def _factory(

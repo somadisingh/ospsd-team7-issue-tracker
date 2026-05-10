@@ -24,7 +24,7 @@ from ai_client_api.exceptions import (
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from claude_ai_client_impl import ClaudeAIClient, ClaudeConfig, MockChatClient
+from claude_ai_client_impl import ClaudeAIClient, ClaudeConfig
 
 from issue_tracker_service.ai_deps import get_ai_client
 
@@ -126,4 +126,4 @@ async def ai_chat(
     )
 
 
-__all__ = ["MockChatClient", "router"]
+__all__ = ["router"]

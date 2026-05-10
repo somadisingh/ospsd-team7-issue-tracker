@@ -14,6 +14,7 @@ members = [
     "issue-tracker-service-client",
     "ospsd-team-07",
 ]
+overrides = [{ name = "chat-client-api", git = "https://github.com/HarshithKoriRaj/Shared-API?rev=main" }]
 
 [[package]]
 name = "ai-client-api"
@@ -186,7 +187,7 @@ wheels = [
 [[package]]
 name = "chat-client-api"
 version = "0.1.0"
-source = { git = "https://github.com/HarshithKoriRaj/Shared-API.git?rev=main#1036a6e9ac40f3b209cfc35abdd8cc9561965cc1" }
+source = { git = "https://github.com/HarshithKoriRaj/Shared-API?rev=main#1036a6e9ac40f3b209cfc35abdd8cc9561965cc1" }
 
 [[package]]
 name = "chat-client-impl"
@@ -194,6 +195,7 @@ version = "0.1.0"
 source = { editable = "components/chat_client_impl" }
 dependencies = [
     { name = "chat-client-api" },
+    { name = "slack-client-impl" },
 ]
 
 [package.optional-dependencies]
@@ -207,6 +209,7 @@ requires-dist = [
     { name = "chat-client-api", git = "https://github.com/HarshithKoriRaj/Shared-API.git?rev=main" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
+    { name = "slack-client-impl", git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source?subdirectory=components%2Fslack_client_impl&rev=91eedf88e6823e1f924cbeb05c6a74aa0a524b34" },
 ]
 provides-extras = ["dev"]
 
@@ -557,6 +560,7 @@ source = { editable = "components/issue_tracker_service" }
 dependencies = [
     { name = "ai-client-api" },
     { name = "chat-client-api" },
+    { name = "chat-client-impl" },
     { name = "claude-ai-client-impl" },
     { name = "fastapi" },
     { name = "issue-tracker-client-api" },
@@ -565,6 +569,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "requests" },
     { name = "requests-oauthlib" },
+    { name = "slack-client-impl" },
     { name = "uvicorn" },
 ]
 
@@ -572,6 +577,7 @@ dependencies = [
 requires-dist = [
     { name = "ai-client-api", editable = "components/ai_client_api" },
     { name = "chat-client-api", git = "https://github.com/HarshithKoriRaj/Shared-API?rev=main" },
+    { name = "chat-client-impl", editable = "components/chat_client_impl" },
     { name = "claude-ai-client-impl", editable = "components/claude_ai_client_impl" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "issue-tracker-client-api", editable = "components/issue_tracker_client_api" },
@@ -580,6 +586,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "requests", specifier = ">=2.30.0" },
     { name = "requests-oauthlib", specifier = ">=1.3.1" },
+    { name = "slack-client-impl", git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source?subdirectory=components%2Fslack_client_impl&rev=91eedf88e6823e1f924cbeb05c6a74aa0a524b34" },
     { name = "uvicorn", specifier = ">=0.24.0" },
 ]
 
@@ -1051,6 +1058,7 @@ dependencies = [
     { name = "issue-tracker-service-client" },
     { name = "ospd-issue-tracker-api" },
     { name = "requests-oauthlib" },
+    { name = "slack-client-impl" },
 ]
 
 [package.optional-dependencies]
@@ -1092,6 +1100,7 @@ requires-dist = [
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.14.0" },
     { name = "requests-oauthlib", specifier = ">=1.3.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.0" },
+    { name = "slack-client-impl", git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source?subdirectory=components%2Fslack_client_impl&rev=91eedf88e6823e1f924cbeb05c6a74aa0a524b34" },
     { name = "types-requests", marker = "extra == 'dev'", specifier = ">=2.31.0" },
 ]
 provides-extras = ["dev"]
@@ -1464,6 +1473,24 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "slack-client-impl"
+version = "0.1.0"
+source = { git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source?subdirectory=components%2Fslack_client_impl&rev=91eedf88e6823e1f924cbeb05c6a74aa0a524b34#91eedf88e6823e1f924cbeb05c6a74aa0a524b34" }
+dependencies = [
+    { name = "chat-client-api" },
+    { name = "slack-sdk" },
+]
+
+[[package]]
+name = "slack-sdk"
+version = "3.41.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/35/fc009118a13187dd9731657c60138e5a7c2dea88681a7f04dc406af5da7d/slack_sdk-3.41.0.tar.gz", hash = "sha256:eb61eb12a65bebeca9cb5d36b3f799e836ed2be21b456d15df2627cfe34076ca", size = 250568, upload-time = "2026-03-12T16:10:11.381Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/df/2e4be347ff98281b505cc0ccf141408cdd25eb5ca9f3830deb361b2472d3/slack_sdk-3.41.0-py2.py3-none-any.whl", hash = "sha256:bb18dcdfff1413ec448e759cf807ec3324090993d8ab9111c74081623b692a89", size = 313885, upload-time = "2026-03-12T16:10:09.811Z" },
 ]
 
 [[package]]

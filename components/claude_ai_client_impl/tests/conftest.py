@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 from api.issue import Status
+from chat_client_impl import LocalChatClient
 from claude_ai_client_impl.config import ClaudeConfig
-from claude_ai_client_impl.mock_chat import MockChatClient
 
 
 @pytest.fixture
@@ -37,8 +37,9 @@ def mock_issue_tracker() -> MagicMock:
 
 
 @pytest.fixture
-def mock_chat() -> MockChatClient:
-    return MockChatClient()
+def mock_chat() -> LocalChatClient:
+    """Seeded in-memory ChatClient (replaces the deleted MockChatClient)."""
+    return LocalChatClient(seeded=True)
 
 
 @pytest.fixture
