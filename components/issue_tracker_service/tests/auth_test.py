@@ -215,9 +215,7 @@ class TestAuthLogin:
             response = client.get("/auth/login")
 
         assert response.status_code == 302
-        mock_instance.get_authorization_url.assert_called_once_with(
-            callback_url="http://testserver/auth/callback"
-        )
+        mock_instance.get_authorization_url.assert_called_once_with(callback_url="http://testserver/auth/callback")
 
 
 @pytest.mark.unit

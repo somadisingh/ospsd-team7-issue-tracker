@@ -23,6 +23,7 @@ from ai_client_api.exceptions import (
 )
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from prometheus_client import Counter
 
 from claude_ai_client_impl import ClaudeAIClient, ClaudeConfig
 
@@ -31,6 +32,11 @@ from issue_tracker_service.ai_deps import get_ai_client
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+_ai_chat_requests_total = Counter(
+    "issue_tracker_ai_chat_requests_total",
+    "Total AI chat requests grouped by semantic result.",
+    labelnames=("result",),
+)
 
 
 # ---------------------------------------------------------------------- #
@@ -109,16 +115,21 @@ async def ai_chat(
     try:
         reply = ai.send_message(body.prompt, context=context or None)
     except AIUnsafeRequestError as exc:
+        _ai_chat_requests_total.labels(result="unsafe_request").inc()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except AIProviderError as exc:
         logger.warning("AI provider failure: %s", exc)
+        _ai_chat_requests_total.labels(result="provider_error").inc()
         raise HTTPException(status_code=502, detail="AI provider unavailable") from exc
     except AIToolError as exc:
+        _ai_chat_requests_total.labels(result="tool_error").inc()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except AIError as exc:
         logger.exception("AI unexpected error")
+        _ai_chat_requests_total.labels(result="internal_error").inc()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    _ai_chat_requests_total.labels(result="success").inc()
     return AIChatResponse(
         reply=reply.reply,
         actions=[AIToolActionResponse(tool=a.tool, ok=a.ok, error=a.error) for a in reply.actions],

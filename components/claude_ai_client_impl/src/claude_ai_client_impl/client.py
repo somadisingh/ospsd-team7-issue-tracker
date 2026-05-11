@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 from ai_client_api import sanitize
@@ -31,6 +32,7 @@ from ai_client_api.exceptions import (
     AIUnsafeRequestError,
 )
 from ai_client_api.types import AIReply, ToolAction
+from prometheus_client import Counter, Histogram
 
 from claude_ai_client_impl.config import ClaudeConfig
 from claude_ai_client_impl.prompt import SYSTEM_PROMPT, render_user_message
@@ -42,6 +44,17 @@ if TYPE_CHECKING:  # pragma: no cover
     from issue_tracker_client_api import Client as IssueTrackerClient
 
 logger = logging.getLogger(__name__)
+
+_anthropic_request_duration_seconds = Histogram(
+    "issue_tracker_ai_anthropic_request_duration_seconds",
+    "Anthropic API request latency in seconds.",
+    labelnames=("model", "result"),
+)
+_ai_tool_invocations_total = Counter(
+    "issue_tracker_ai_tool_invocations_total",
+    "Total AI tool invocations by tool name and outcome.",
+    labelnames=("tool", "outcome"),
+)
 
 
 class ClaudeAIClient(AIClient):
@@ -132,19 +145,30 @@ class ClaudeAIClient(AIClient):
         messages: list[dict[str, Any]],
         tools_schema: list[dict[str, Any]],
     ) -> Any:
+        start = time.perf_counter()
         try:
             # ``tools`` and ``messages`` are TypedDicts in the Anthropic SDK;
             # we build them dynamically from dicts/schemas so we cast to Any.
-            return self._client.messages.create(
+            response = self._client.messages.create(
                 model=self._config.model,
                 max_tokens=self._config.max_tokens,
                 system=SYSTEM_PROMPT,
                 tools=tools_schema,  # type: ignore[arg-type]
                 messages=messages,  # type: ignore[arg-type]
             )
+            result = str(getattr(response, "stop_reason", "unknown") or "unknown")
+            _anthropic_request_duration_seconds.labels(
+                model=self._config.model, result=result
+            ).observe(time.perf_counter() - start)
+            return response
         except Exception as exc:
+            _anthropic_request_duration_seconds.labels(
+                model=self._config.model, result="error"
+            ).observe(time.perf_counter() - start)
             logger.warning("Anthropic call failed: %s", exc)
             raise AIProviderError(f"Upstream Claude call failed: {exc}") from exc
+        else:
+            return response
 
     def _run_tools(
         self,
@@ -166,16 +190,23 @@ class ClaudeAIClient(AIClient):
                 ok = True
                 error: str | None = None
                 result_payload = _json_safe(result)
+                _ai_tool_invocations_total.labels(tool=tool_name, outcome="ok").inc()
             except AIToolError as exc:
                 ok = False
                 error = str(exc)
                 result_payload = f"[tool_error] {error}"
                 logger.info("Tool %s rejected: %s", tool_name, error)
+                _ai_tool_invocations_total.labels(
+                    tool=tool_name, outcome="tool_error"
+                ).inc()
             except Exception as exc:
                 ok = False
                 error = f"Tool {tool_name!r} failed: {exc}"
                 result_payload = f"[tool_error] {error}"
                 logger.warning("Tool %s raised: %s", tool_name, exc)
+                _ai_tool_invocations_total.labels(
+                    tool=tool_name, outcome="runtime_error"
+                ).inc()
 
             actions.append(
                 ToolAction(
