@@ -79,10 +79,21 @@ class TrelloClient(Client):
         self._request_token_secret = request_token_secret
         self._request_token: str | None = None
 
+        # Fail fast when callers try OAuth1 auth with partial credentials.
+        # (`token` without OAuth1 signing is still supported for key+token query auth.)
+        oauth_parts = (self.secret, access_token, self._access_token_secret)
+        if (access_token or self._access_token_secret) and not all(oauth_parts):
+            raise ValueError(
+                "Trello OAuth requires api_key, secret, access_token, and access_token_secret"
+            )
+
         self._oauth: OAuth1 | None = None
-        if self._access_token and self._access_token_secret and secret:
+        if all(oauth_parts):
+            assert self.secret is not None
+            assert self._access_token is not None
+            assert self._access_token_secret is not None
             self._oauth = OAuth1(
-                api_key, secret, self._access_token, self._access_token_secret
+                api_key, self.secret, self._access_token, self._access_token_secret
             )
 
     # ------------------------------------------------------------------ #

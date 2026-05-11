@@ -403,6 +403,27 @@ class TestTrelloClientInit:
         )
         assert client._oauth is not None
 
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"access_token": "at"},
+            {"access_token_secret": "ats"},
+            {"secret": "secret", "access_token": "at"},
+            {"secret": "secret", "access_token_secret": "ats"},
+            {"access_token": "at", "access_token_secret": "ats"},
+        ],
+    )
+    def test_partial_oauth_credentials_raise(self, kwargs: dict[str, str]) -> None:
+        with pytest.raises(
+            ValueError,
+            match="Trello OAuth requires api_key, secret, access_token, and access_token_secret",
+        ):
+            TrelloClient(api_key="key", **kwargs)
+
+    def test_secret_only_is_allowed_for_oauth_flow_init(self) -> None:
+        client = TrelloClient(api_key="key", secret="secret")
+        assert client is not None
+
     def test_query_with_oauth_skips_key_token(self) -> None:
         client = TrelloClient(
             api_key="key", secret="secret", access_token="at", access_token_secret="ats"
