@@ -200,4 +200,6 @@ workflows:
             - validate_infra
           filters:
             branches:
-              only: main
+              only:
+                - main
+                - hw3
