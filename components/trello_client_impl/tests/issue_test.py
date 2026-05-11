@@ -4,7 +4,11 @@ from typing import Any
 
 import pytest
 from api.issue import Status
-from trello_client_impl.issue import TrelloCard, _infer_status
+from trello_client_impl.issue import (
+    TrelloCard,
+    _infer_status,
+    _warned_unknown_status_lists,
+)
 
 
 @pytest.mark.unit
@@ -75,3 +79,13 @@ class TestInferStatus:
 
     def test_unknown_defaults_to_todo(self) -> None:
         assert _infer_status("Random Column") == Status.TO_DO
+
+    def test_unknown_list_logs_warning_once(self, caplog: pytest.LogCaptureFixture) -> None:
+        _warned_unknown_status_lists.clear()
+        caplog.set_level("WARNING")
+
+        assert _infer_status("Custom Stage") == Status.TO_DO
+        assert _infer_status("Custom Stage") == Status.TO_DO
+
+        warning_records = [r for r in caplog.records if "Unknown Trello list name" in r.message]
+        assert len(warning_records) == 1

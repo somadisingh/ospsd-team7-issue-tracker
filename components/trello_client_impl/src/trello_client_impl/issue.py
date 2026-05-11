@@ -1,9 +1,12 @@
 """Implementation of the Issue contract for Trello cards."""
 
+import logging
 from typing import TypedDict, TypeGuard
 
 from api.issue import Status
 from issue_tracker_client_api import Issue
+
+logger = logging.getLogger(__name__)
 
 
 class _TrelloCardResponse(TypedDict, total=False):
@@ -33,6 +36,7 @@ _STATUS_PATTERNS: dict[str, Status] = {
     "complete": Status.COMPLETED,
     "completed": Status.COMPLETED,
 }
+_warned_unknown_status_lists: set[str] = set()
 
 
 def _infer_status(list_name: str) -> Status:
@@ -41,6 +45,13 @@ def _infer_status(list_name: str) -> Status:
     for pattern, status in _STATUS_PATTERNS.items():
         if pattern in normalised:
             return status
+    if normalised and normalised not in _warned_unknown_status_lists:
+        logger.warning(
+            "Unknown Trello list name '%s'; defaulting status to %s",
+            list_name,
+            Status.TO_DO.value,
+        )
+        _warned_unknown_status_lists.add(normalised)
     return Status.TO_DO
 
 
