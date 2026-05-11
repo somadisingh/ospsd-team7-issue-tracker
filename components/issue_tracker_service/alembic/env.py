@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from issue_tracker_service.db.base import Base
-
-import os
 from logging.config import fileConfig
 
 from dotenv import load_dotenv
@@ -12,6 +9,9 @@ from sqlalchemy import create_engine, pool
 from sqlalchemy.engine import Connection
 
 from alembic import context
+
+from issue_tracker_service.db.base import Base
+from issue_tracker_service.db.engine import get_database_url
 
 load_dotenv()
 
@@ -29,11 +29,8 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    url = os.environ.get("DATABASE_URL")
-    if not url:
-        msg = "DATABASE_URL must be set to run Alembic (add to your shell or a .env file)."
-        raise RuntimeError(msg)
-    return url
+    """Same normalization as the app (``postgresql+psycopg``), so Alembic matches runtime."""
+    return get_database_url()
 
 
 def run_migrations_offline() -> None:

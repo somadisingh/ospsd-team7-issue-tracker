@@ -2,13 +2,13 @@
 
 ## Overview
 
-`issue_tracker_service` is a FastAPI application that wraps the `trello_client_impl` behind REST endpoints with OAuth 1.0a session-based authentication. It is the main deployment unit for this project, deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com).
+`issue_tracker_service` is a FastAPI application that wraps the `trello_client_impl` behind REST endpoints with OAuth 1.0a session-based authentication. It is the main deployment unit for this project (**Google Cloud Run** — see repository **`README.md`** and **`infrastructure/terraform/`**).
 
 ## Purpose
 
 - **HTTP API:** Exposes all `Client` operations as REST endpoints (boards, lists, issues, members).
 - **OAuth 1.0a:** Provides `/auth/login` and `/auth/callback` endpoints for the Trello OAuth flow, issuing server-side session tokens.
-- **Health check:** `GET /health` returns `{"status": "ok"}` for liveness probes.
+- **Health check:** `GET /health` returns `200` with JSON status (and DB connectivity when configured).
 - **Dependency injection:** Uses FastAPI's `Depends()` to inject an authenticated `TrelloClient` into every endpoint handler.
 
 ## Architecture
@@ -51,24 +51,35 @@ Browser/Client
 | --------------------- | -------- | ---------------------------------------------------------------------- |
 | `TRELLO_API_KEY`      | Yes      | Trello API key                                                         |
 | `TRELLO_API_SECRET`   | Yes      | Trello API secret (consumer secret)                                    |
-| `DATABASE_URL`        | Yes      | SQLAlchemy URL (e.g. Postgres on Render or local)                      |
+| `DATABASE_URL`        | Yes      | SQLAlchemy URL (e.g. Postgres on Render, Supabase, or local SQLite/Postgres) |
 | `TRELLO_CALLBACK_URL` | No       | OAuth callback URL (defaults to `http://localhost:8000/auth/callback`) |
 
-### OpenTelemetry (course: latency, success vs failure)
+### Telemetry (Prometheus + optional OpenTelemetry)
 
-The service exports **OTLP/HTTP** traces and **HTTP metrics** when endpoints and optional headers are set. See repository **`.env.example`**.
+The service always exposes Prometheus metrics at **`GET /metrics`** (disable with `PROMETHEUS_METRICS_ENABLED=false`) and can export **OTLP/HTTP** traces and metrics when endpoints and optional headers are set. See repository **`.env.example`**.
 
 | Variable | Role |
 | -------- | ---- |
-| `OTEL_SERVICE_NAME` | Logical service name in the backend (default: `issue-tracker-service`). |
+| `PROMETHEUS_METRICS_ENABLED` | Enables `/metrics` scrape endpoint (default `true`). |
+| `OTEL_SERVICE_NAME` | Logical service name in OTLP backend (default: `issue-tracker-service`). |
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Full URL to `.../v1/traces` (or set `OTEL_EXPORTER_OTLP_ENDPOINT` base; see `.env.example`). |
 | `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | Full URL to `.../v1/metrics` (optional if derived from traces URL). |
 | `OTEL_EXPORTER_OTLP_HEADERS` | Comma-separated `Key=Value` auth headers for your vendor. |
 | `OTEL_SDK_DISABLED` | Set to `true` for local/CI when you are not sending data to a collector. |
 
-**Metrics emitted (for dashboards):** `http.server.request.duration` (seconds), `http.server.responses` (count) with labels `http.method`, `http.route` (template/low-cardinality), and `status.class` (`200`, `400`, `500`, …) for success vs error rate.
+**Prometheus metrics emitted (for dashboards):**
 
-Run **database migrations** before first deploy traffic (from **repository root** so `.env` loads): `uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head` — on **paid** Render with `preDeployCommand`, that can run automatically; on **Render free** web services, pre-deploy is unavailable, so run migrations once via **Render Shell** (same command, with `DATABASE_URL` set) after the first deploy or schema change.
+- `issue_tracker_http_request_duration_seconds` with labels `method`, `route`, `status`
+- `issue_tracker_http_requests_total` with labels `method`, `route`, `status`
+- `issue_tracker_http_request_outcomes_total` with labels `method`, `route`, `status`, `outcome`, `failure_kind`
+
+`failure_kind` values are `domain` for 4xx and `infrastructure` for 5xx; success responses use `none`.
+
+**OTel metrics (when OTLP is configured):** `http.server.request.duration`, `http.server.responses` with route/method/status attributes.
+
+Prebuilt Grafana dashboard JSON is available at `infrastructure/monitoring/grafana/dashboards/issue-tracker-kpis.json`, with provisioning config in `infrastructure/monitoring/grafana/provisioning/`.
+
+**Migrations:** On **Cloud Run**, **`docker-entrypoint.sh`** runs **`alembic upgrade head`** before **uvicorn** (override with **`SKIP_ALEMBIC=true`** only for debugging). On **Render**, use `preDeployCommand` when available, or run once via **Render Shell**. Locally, from repo root: `uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head`.
 
 ## API Reference
 
@@ -118,19 +129,17 @@ Run **database migrations** before first deploy traffic (from **repository root*
 
 ## Deployment
 
-The service is deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com) as a web service.
+Production hosting is modeled with **GCP Cloud Run + Terraform** at [`infrastructure/terraform/`](../../../infrastructure/terraform/) (Docker image builds from repo root; container runs Alembic then uvicorn). Details: [`../../../infrastructure/terraform/README.md`](../../../infrastructure/terraform/README.md).
 
 | Setting            | Value                                                                       |
 | ------------------ | --------------------------------------------------------------------------- |
-| **Platform**       | [Render](https://render.com)                                                |
-| **URL**            | `https://ospsd-team7-issue-tracker.onrender.com`                            |
-| **Build command**  | `pip install uv && uv sync --all-extras`                                    |
-| **Start command**  | `uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port $PORT` |
-| **Python version** | 3.12                                                                        |
+| **Platform (GCP)** | [Google Cloud Run](https://cloud.google.com/run) + Terraform in-repo        |
+| **Platform (alt)** | [Render](https://render.com) via root [`render.yaml`](../../../render.yaml) |
+| **Example URLs**   | Cloud Run: `terraform output -raw service_url` · Render: team URL in root README |
 
-Environment variables (`TRELLO_API_KEY`, `TRELLO_API_SECRET`, `TRELLO_CALLBACK_URL`) are configured in the Render dashboard under **Environment > Secret Files / Environment Variables**.
+On **`main`**, CircleCI **`deploy_gcp`** can **`gcloud builds submit`** and optionally **`terraform apply`** once you configure GCP env vars (**`infrastructure/terraform/README.md`** → *Automate deploys on `main`*).
 
-CircleCI triggers a Render deploy hook after all lint, test, and health check jobs pass. See `.circleci/config.yml` for details.
+Environment secrets for Cloud Run land in **Secret Manager** via Terraform (`database_url`, Trello credentials, optional OTLP/Anthropic). Use `terraform output trello_callback_hint` to align **`TRELLO_CALLBACK_URL`** with the Cloud Run hostname after the first revision.
 
 ## Running locally
 

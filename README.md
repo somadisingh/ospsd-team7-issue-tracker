@@ -32,7 +32,7 @@ The project is a `uv` workspace containing five packages:
 
 1. **`issue_tracker_client_api`**: Defines the abstract `Client` base class (ABC). This is the contract for what actions an issue tracker client can perform (e.g., `get_issues_in_list`, `get_board`, `get_boards`, `get_members_on_issue`).
 2. **`trello_client_impl`**: Provides the `TrelloClient` class, a concrete implementation that uses the Trello API directly.
-3. **`issue_tracker_service`**: A FastAPI application that wraps the Trello client behind REST endpoints with OAuth 1.0a authentication. Deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com).
+3. **`issue_tracker_service`**: A FastAPI application that wraps the Trello client behind REST endpoints with OAuth 1.0a authentication. Production deploy is **Google Cloud Run** via Terraform (**`terraform output service_url`** for the HTTPS URL — see Deployment).
 4. **`issue_tracker_service_api_client`**: An auto-generated Python HTTP client created from the FastAPI service's OpenAPI specification using `openapi-python-client`.
 5. **`issue_tracker_adapter`**: A service client adapter that implements the `Client` ABC by delegating to the auto-generated HTTP client, achieving location transparency.
 6. **`chat_client_impl`**: A local in-memory chat client implementation that uses the shared `chat-client-api` contract from GitHub.
@@ -209,15 +209,17 @@ See [docs/ci-cd.md](docs/ci-cd.md) for detailed CI/CD setup instructions.
 
 ## Deployment
 
-The FastAPI service is deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com) with continuous deployment via CircleCI.
+### Google Cloud Run (primary — Infrastructure as Code)
 
-| Setting | Value |
-|---|---|
-| **Platform** | [Render](https://render.com) (Web Service) |
-| **Live URL** | `https://ospsd-team7-issue-tracker.onrender.com` |
-| **Health check** | `https://ospsd-team7-issue-tracker.onrender.com/health` |
-| **Build command** | `pip install uv && uv sync --all-extras` |
-| **Start command** | `uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port $PORT` |
+Production-style hosting is modeled in Terraform under **`infrastructure/terraform/`**: Artifact Registry, Secret Manager-backed env vars, IAM, and Cloud Run ([runbook](infrastructure/terraform/README.md)).
+
+- **`/health`:** Deployed instances expose **`GET /health`** (JSON). Verify with **`curl -sf "$(terraform output -raw service_url 2>/dev/null)/health"`** from **`infrastructure/terraform`** after apply, or use the URL below.
+- **HTTPS URL:** After **`terraform apply`**, run **`terraform output -raw service_url`** for the authoritative Cloud Run URL (also shown in the GCP console under Cloud Run → your service).
+- **Team GCP URL (document for graders / video):** [`https://issue-tracker-service-688420327904.us-central1.run.app`](https://issue-tracker-service-688420327904.us-central1.run.app) — yours may differ; always confirm with **`terraform output -raw service_url`**.
+- Build the image from repo root (`Dockerfile`); the container runs **`alembic upgrade head` then uvicorn**, so Postgres/Supabase schemas stay aligned at startup (same behavior as **`docker-entrypoint.sh`** describes).
+- Populate a gitignored **`secrets.tfvars`** (see `terraform.tfvars.example`). **Push the first Docker image**, then **`terraform apply`**. Repeat after each image bump, or wire **[CircleCI `deploy_gcp`](infrastructure/terraform/README.md)** on `main` (Cloud Build push; optional **`terraform apply`** after migrating state to a GCS bucket).
+- `DATABASE_URL` remains your **Supabase** (or Cloud SQL, etc.) DSN—the database is independent of GCP unless you relocate it later.
+- Trello OAuth: Cloud Run assigns the hostname on first revision. Run **`terraform output trello_callback_hint`** after the initial deploy and set **`trello_callback_url`** to that URL on the next apply.
 
 ### Deployment with Render Blueprint
 
@@ -300,61 +302,78 @@ cd components/issue_tracker_service
 uv run alembic revision --autogenerate -m "describe your change"
 ```
 
+### Database Migrations (Cloud Run / Docker image)
+
+Schema changes live in **`components/issue_tracker_service/alembic/`**. Docker and Cloud Run run Alembic at container startup (**`docker-entrypoint.sh`**).
+
+```bash
+# Local (cwd: components/issue_tracker_service)
+export DATABASE_URL="postgresql+psycopg://user:pass@localhost:5432/issue_tracker"
+uv run alembic -c alembic.ini upgrade head
+
+# Root (same ini path as CI/production image)
+uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head
+```
+
+**Create a revision (same as above):**
+
+```bash
+cd components/issue_tracker_service
+uv run alembic revision --autogenerate -m "describe your change"
+```
+
 ### Rollback Procedure
 
-If a deployment introduces a problem, you can roll back to a previous version:
+**Render:** If a deployment introduces a problem, use the **Render Dashboard** → `issue-tracker-service` → **Events** → redeploy a known-good revision. Render keeps the previous version running if a deploy fails its health check.
 
-1. Go to the **Render Dashboard** → select `issue-tracker-service` → **Events** tab.
-2. Find the last known good deploy in the deploy history.
-3. Click on that deploy and select **Manual Deploy** (or "Redeploy").
-4. Render will rebuild and deploy from that commit.
+**Cloud Run:** Move traffic back to an earlier revision in the console or via `gcloud run services update-traffic`.
 
-Render keeps the previous version running if a deploy fails its health check, so the service remains available during failed deployments.
-
-> **Note:** Database migrations are not automatically rolled back. If a migration needs to be reverted, run `uv run alembic downgrade -1` manually against the database.
+> **Note:** Database migrations are not automatically rolled back. If a migration needs to be reverted, run `alembic downgrade -1` manually against the database.
 
 ### Monitoring & Observability
 
-The service is instrumented with **OpenTelemetry** for distributed tracing and HTTP metrics. The `telemetry.py` module auto-instruments FastAPI endpoints and the `requests` library (used for Trello API calls).
+The service is instrumented with **OpenTelemetry** (FastAPI + `requests`) and exposes **Prometheus** metrics at **`GET /metrics`**.
 
-**What is collected:**
+**Prometheus (scrape from Cloud Run or local):**
 
-- Request duration histograms (`http.server.duration`) with route and status code attributes
-- Trace spans for all HTTP requests (including outbound Trello API calls)
-- Custom HTTP metrics middleware for success/failure rate tracking
+- `issue_tracker_http_request_duration_seconds` (histogram)
+- `issue_tracker_http_requests_total` (counter)
+- `issue_tracker_http_request_outcomes_total` (counter with `outcome` and `failure_kind`)
 
-**To enable telemetry export in production:**
+**OTel (optional OTLP export):** histogram `http.server.request.duration`, counter `http.server.responses`, plus trace spans. On **Render**, set `OTEL_EXPORTER_OTLP_*` in the dashboard; on **GCP**, set OTLP via Terraform / env. Telemetry export is skipped when `OTEL_SDK_DISABLED=true` (CI / local).
 
-Set the following environment variables in the Render dashboard (see "Setting secrets" above):
+For local dashboards, use `infrastructure/monitoring/docker-compose.yml` and `infrastructure/monitoring/prometheus.yml` (Grafana provisions **Issue Tracker KPI Dashboard**).
 
-- `OTEL_EXPORTER_OTLP_ENDPOINT` — your OTLP-compatible backend URL
-- `OTEL_EXPORTER_OTLP_HEADERS` — authentication headers for the backend
-
-Telemetry is disabled when `OTEL_SDK_DISABLED=true` (used in CI and local development).
+```bash
+cd infrastructure/monitoring
+docker compose up -d
+```
 
 ### E2E Testing
 
-The stable base URL for end-to-end tests against the deployed service is:
+Use the URL of the environment you are testing:
 
-```
-https://ospsd-team7-issue-tracker.onrender.com
-```
-
-Set this in your environment or CI configuration:
+**Render (example):**
 
 ```bash
 export SERVICE_BASE_URL="https://ospsd-team7-issue-tracker.onrender.com"
 ```
 
+**Cloud Run:**
+
+```bash
+export SERVICE_BASE_URL="$(cd infrastructure/terraform && terraform output -raw service_url)"
+```
+
 See `tests/e2e/conftest.py` for the full list of required environment variables (`SERVICE_BASE_URL`, `SERVICE_SESSION_TOKEN`, etc.).
 
-### Environment variables (configured in Render dashboard)
+### Environment variables (Render dashboard / GCP Secret Manager / local)
+
+**Render:** Configure secrets and env vars in the Render service dashboard (see tables above). **GCP:** Production values for **`DATABASE_URL`**, **`TRELLO_*`**, and optional OTLP headers are modeled in **GCP Secret Manager** by Terraform (**Mode B** writes initial versions via vars; **Mode A** sets versions only in GCP). **Local dev:** copy **[`.env.example`](.env.example)** to `.env`.
 
 | Variable | Description |
 |---|---|
-| `TRELLO_API_KEY` | Trello API key |
-| `TRELLO_API_SECRET` | Trello API secret (consumer secret for OAuth) |
-| `TRELLO_CALLBACK_URL` | OAuth callback URL (e.g. `https://ospsd-team7-issue-tracker.onrender.com/auth/callback`) |
+| `TRELLO_CALLBACK_URL` | Must match **`https://<cloud-run-host>/auth/callback`** (`terraform output trello_callback_hint`). |
 
 ### CI/CD pipeline
 
@@ -363,8 +382,9 @@ Every push triggers the following CircleCI workflow (see [`.circleci/config.yml`
 1. **`lint`** — Ruff (check + format) and Mypy
 2. **`test`** — Unit, integration, and E2E tests with coverage reporting
 3. **`health_check`** — Starts the service locally and verifies `GET /health` returns 200
-4. **`validate_infra`** — Validates `render.yaml` YAML syntax
-5. **`deploy`** — Triggers a Render deploy hook (runs only after all jobs above pass)
+4. **`validate_infra`** — Validates Terraform (`terraform fmt`/validate with `-backend=false`) and `render.yaml` syntax
+5. **`deploy`** — Triggers a Render deploy hook after lint, test, and health_check (skips if hook URL unset)
+6. **`deploy_gcp`** (**`main`** only, after `validate_infra`) — Cloud Build pushes the Docker image (`:latest` + commit SHA). Optional **`terraform apply`** when `GCP_CI_DEPLOY`, service-account env vars, and (optionally) `GCP_TERRAFORM_STATE_BUCKET` are configured — see **[`infrastructure/terraform/README.md`](infrastructure/terraform/README.md)** (Automate deploys).
 
 ### A note on OAuth
 
@@ -379,37 +399,41 @@ For more details, see [docs/ci-cd.md](docs/ci-cd.md).
 **Symptom:** Service fails to start with a database connection error, or health check returns `503` with `"database": "unavailable"`.
 
 **Possible causes:**
-- `DATABASE_URL` is not set or has an invalid format
-- The PostgreSQL instance is not yet provisioned (check Render dashboard → Databases)
-- Network connectivity issue between the web service and database
+
+- `DATABASE_URL` is not set or has an invalid format (locally `.env`; on **Render**, check the linked database; on **Cloud Run**, Secret **`issue-tracker-database-url`**)
+- Postgres not provisioned yet, unreachable, or paused
+- Network / SSL / firewall between the service and the database
 
 **Fix:**
-1. Verify the database is running in the Render dashboard.
-2. Check that `DATABASE_URL` is correctly linked in the service's environment variables (it should show as "From issue-tracker-db").
-3. If the database was recently created, wait a few minutes for provisioning to complete.
+
+1. **Render:** verify the database add-on is running and `DATABASE_URL` is linked from `issue-tracker-db`.
+2. **GCP:** in **Secret Manager**, confirm **`issue-tracker-database-url`** has an enabled **`latest`** version; read **Cloud Run** logs for Alembic/connection errors during startup.
+3. Confirm your DB allows connections from the hosting platform (public IP vs VPC connector).
 
 ### Missing environment variables
 
 **Symptom:** Service fails to start or features don't work (OAuth fails, AI features disabled).
 
 **Fix:**
-1. Compare the variables in your Render service environment against the list in [`.env.example`](.env.example).
-2. Ensure all `sync: false` secrets are set in the Render dashboard (see "Setting secrets" section above).
-3. Check the service logs in Render for specific "missing variable" error messages.
+
+1. Compare [`.env.example`](.env.example) with **Render** env vars or **GCP Secret Manager** / Terraform outputs (`secret_manager_*_id`).
+2. Ensure required secrets exist (`sync: false` on Render; **`latest`** versions on GCP).
+3. Check **Render** deploy logs or **Cloud Run** revision logs for missing-variable errors.
 
 ### Migration failures
 
-**Symptom:** Deploy fails during the pre-deploy command with an Alembic error.
+**Symptom:** Deploy fails during **Render** pre-deploy **or** during **Cloud Run** container startup (**Alembic** in **`docker-entrypoint.sh`**) before traffic is healthy.
 
 **Possible causes:**
-- A migration script has a syntax error or references a non-existent column/table
-- The database is in an inconsistent state (e.g., a previous migration was partially applied)
+
+- A migration script has a syntax error or references a missing column/table
+- The database is in an inconsistent state (e.g. a previous migration partially applied)
 
 **Fix:**
-1. Check the deploy logs in Render for the specific Alembic error message.
-2. If a migration was partially applied, connect to the database and inspect the `alembic_version` table.
-3. Fix the migration script, commit, and push to trigger a new deploy.
-4. As a last resort, manually run `uv run alembic downgrade -1` and then re-deploy.
+
+1. Read deploy / revision logs for the Alembic error.
+2. Inspect **`alembic_version`** in the database if needed.
+3. Fix migrations and redeploy; on Cloud Run you may need a new image plus **`terraform apply`** (or **`deploy_gcp`**). **`SKIP_ALEMBIC=true`** is only for emergency debugging (avoid on production Postgres).
 
 ### OpenTelemetry export issues
 
@@ -421,10 +445,10 @@ For more details, see [docs/ci-cd.md](docs/ci-cd.md).
 - The observability backend is rejecting requests (auth failure, quota exceeded)
 
 **Fix:**
-1. Verify `OTEL_SDK_DISABLED` is `false` in the Render environment.
-2. Check that `OTEL_EXPORTER_OTLP_ENDPOINT` points to a valid OTLP endpoint.
-3. Verify the auth headers in `OTEL_EXPORTER_OTLP_HEADERS` are correct and URL-encoded.
-4. Check the service logs for OTel export warnings — the service continues running even if export fails.
+
+1. Verify `OTEL_SDK_DISABLED` is not `true` (Render env or Terraform / Cloud Run).
+2. Confirm **`OTEL_EXPORTER_OTLP_*`** endpoints and headers match your vendor (URL-encoded headers where required).
+3. Check **Render** or **Cloud Run** logs for export warnings — the app keeps running if export fails.
 
 ## License
 

@@ -1,6 +1,6 @@
 # Issue Tracker Service (FastAPI)
 
-REST API service that wraps the `issue_tracker_client_api` and exposes Trello operations over HTTP. Deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com).
+REST API service that wraps the `issue_tracker_client_api` and exposes Trello operations over HTTP. Production hosting is **Google Cloud Run**, provisioned with Terraform under **`infrastructure/terraform/`**. The public HTTPS URL is **`terraform output -raw service_url`** (your project-specific host).
 
 ## Overview
 

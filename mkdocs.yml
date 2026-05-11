@@ -32,6 +32,11 @@ nav:
     - "Chat Client API": "api/chat_client_api.md"
   - "Code Quality": "code-quality.md"
   - "CI/CD": "ci-cd.md"
+  - "Operations":
+    - "IaC + Telemetry Requirements": "requirements/iac-telemetry-requirements.md"
+    - "IaC + Telemetry Design": "design/iac-telemetry-design.md"
+    - "IaC + Telemetry Tasks": "tasks/iac-telemetry-tasks.md"
+    - "Grafana KPI Runbook": "monitoring/grafana-kpi-runbook.md"
 
 markdown_extensions:
   - pymdownx.highlight:

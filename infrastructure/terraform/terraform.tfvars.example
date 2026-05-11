@@ -1,0 +1,32 @@
+project_id             = "your-gcp-project-id"
+region                 = "us-central1"
+artifact_repository_id = "issue-tracker"
+image_name             = "issue-tracker-service"
+image_tag              = "latest"
+
+# Defaults: Terraform manages first secret versions — still need DATABASE_URL/Trello as TF_VAR_* / below.
+manage_secret_versions_in_terraform = true
+deploy_cloud_run_service            = true
+
+# --- External payloads only (GCP Console / `gcloud secrets versions add`) -------------
+# Uncomment and omit database_url / trello_* from Terraform entirely:
+#
+# manage_secret_versions_in_terraform = false
+# deploy_cloud_run_service           = false
+# provision_anthropic_secret_shell  = false
+# provision_otlp_headers_secret_shell = false
+#
+# 1) terraform apply -var-file=secrets.tfvars   # creates shells + Artifact Registry IAM; no Cloud Run
+# 2) Add payloads for terraform output secret_manager_*_id names
+# 3) terraform apply with deploy_cloud_run_service = true
+
+# See README — use CI TF_VAR_* where possible; never commit real credential files.
+
+database_url       = "postgresql+psycopg://...@...:5432/postgres"
+trello_api_key     = "(from Trello Power-Up Admin)"
+trello_api_secret  = "(consumer secret)"
+
+trello_callback_url = ""
+
+otel_service_name   = "issue-tracker-service"
+ai_allow_mutations  = true

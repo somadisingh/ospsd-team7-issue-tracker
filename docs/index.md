@@ -44,7 +44,7 @@ register()
 from issue_tracker_client_api import get_client
 
 client = get_client(
-    base_url="https://ospsd-team7-issue-tracker.onrender.com",
+    base_url="https://issue-tracker-service-688420327904.us-central1.run.app",
     session_token="<session-token-from-oauth>",
 )
 for board in client.get_boards():

@@ -125,8 +125,10 @@ class ServiceClientAdapter(Client):
         """Initialize the adapter.
 
         Args:
-            base_url: Base URL of the deployed service.
-            session_token: Session token obtained via the OAuth callback.
+            base_url: Base URL of the deployed service
+                (e.g. ``https://issue-tracker-service-PROJECT_NUMBER.region.run.app`` from ``terraform output -raw service_url``).
+            session_token: Session token obtained from the ``/auth/callback``
+                endpoint after completing the OAuth flow.
 
         """
         self._session_token = session_token

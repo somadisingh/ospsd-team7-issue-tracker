@@ -53,7 +53,8 @@ def e2e_client_config(e2e_credentials: dict[str, str]) -> dict[str, str]:
 def e2e_service_url() -> str:
     """Provide the deployed service URL from environment."""
     return os.getenv(
-        "SERVICE_BASE_URL", "https://ospsd-team7-issue-tracker.onrender.com"
+        "SERVICE_BASE_URL",
+        "https://issue-tracker-service-688420327904.us-central1.run.app",
     )
 
 

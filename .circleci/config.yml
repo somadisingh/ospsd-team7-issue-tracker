@@ -124,6 +124,32 @@ jobs:
             sleep 5
             curl -sf http://localhost:8000/health || exit 1
 
+  validate_infra:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run:
+          name: Validate Terraform
+          command: |
+            set -eu
+            TVER=1.10.5
+            curl -sSfL -o terraform.zip \
+              "https://releases.hashicorp.com/terraform/${TVER}/terraform_${TVER}_linux_amd64.zip"
+            unzip -o terraform.zip terraform
+            chmod +x terraform
+            mkdir -p /tmp/tf-"$TVER" && mv terraform /tmp/tf-"$TVER"/
+            export PATH="/tmp/tf-$TVER:${PATH}"
+            cd infrastructure/terraform
+            terraform fmt -check -recursive
+            terraform init -backend=false -input=false
+            terraform validate
+      - run:
+          name: Validate render.yaml
+          command: |
+            pip install pyyaml
+            python -c "import yaml; yaml.safe_load(open('render.yaml'))"
+
   deploy:
     docker:
       - image: cimg/python:3.12
@@ -141,16 +167,17 @@ jobs:
             }
             echo "Render deploy triggered successfully"
 
-  validate_infra:
+  deploy_gcp:
     docker:
-      - image: cimg/python:3.12
+      - image: google/cloud-sdk:stable
     steps:
       - checkout
       - run:
-          name: Validate render.yaml
+          name: GCP Cloud Build (optional Terraform apply)
           command: |
-            pip install pyyaml
-            python -c "import yaml; yaml.safe_load(open('render.yaml'))"
+            apt-get update -qq &&
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip >/dev/null
+            bash .circleci/gcp_deploy.sh
 
 workflows:
   version: 2
@@ -165,3 +192,12 @@ workflows:
             - lint
             - test
             - health_check
+      - deploy_gcp:
+          requires:
+            - lint
+            - test
+            - health_check
+            - validate_infra
+          filters:
+            branches:
+              only: main
