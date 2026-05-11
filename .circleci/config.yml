@@ -154,7 +154,7 @@ jobs:
           name: GCP Cloud Build (optional Terraform apply)
           command: |
             apt-get update -qq &&
-              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unzip >/dev/null
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl unzip >/dev/null
             bash .circleci/gcp_deploy.sh
 
 workflows:
