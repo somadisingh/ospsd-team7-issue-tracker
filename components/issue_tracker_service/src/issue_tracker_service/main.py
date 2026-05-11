@@ -10,7 +10,6 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Dict, List, Optional
 
 import issue_tracker_client_api
 from api.issue import Status
@@ -129,8 +128,8 @@ class IssueResponse(BaseModel):
     id: str
     title: str
     desc: str
-    members: Optional[List[str]] = None
-    due_date: Optional[str] = None
+    members: list[str] | None = None
+    due_date: str | None = None
     status: str
     board_id: str
 
@@ -151,25 +150,25 @@ class CreateBoardRequest(BaseModel):
 
 
 class UpdateBoardRequest(BaseModel):
-    name: Optional[str] = None
+    name: str | None = None
 
 
 class CreateIssueRequest(BaseModel):
     title: str
     board_id: str
-    desc: Optional[str] = None
-    members: Optional[List[str]] = None
-    due_date: Optional[str] = None
+    desc: str | None = None
+    members: list[str] | None = None
+    due_date: str | None = None
     status: str = Status.TO_DO.value
 
 
 class UpdateIssueRequest(BaseModel):
-    title: Optional[str] = None
-    desc: Optional[str] = None
-    members: Optional[List[str]] = None
-    due_date: Optional[str] = None
-    status: Optional[str] = None
-    board_id: Optional[str] = None
+    title: str | None = None
+    desc: str | None = None
+    members: list[str] | None = None
+    due_date: str | None = None
+    status: str | None = None
+    board_id: str | None = None
 
 
 class CreateListRequest(BaseModel):
@@ -248,7 +247,7 @@ def get_authenticated_client(
 # ------------------------------------------------------------------ #
 
 
-@app.get("/boards", response_model=List[BoardResponse])
+@app.get("/boards", response_model=list[BoardResponse])
 async def list_boards(client: TrelloClient = Depends(get_authenticated_client)) -> list[BoardResponse]:
     return [_board_to_response(board) for board in client.get_boards()]
 
@@ -274,8 +273,8 @@ async def update_board(
     return _board_to_response(client.update_board(board_id=board_id, name=body.name))
 
 
-@app.delete("/boards/{board_id}", response_model=Dict[str, bool])
-async def delete_board(board_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> Dict[str, bool]:
+@app.delete("/boards/{board_id}", response_model=dict[str, bool])
+async def delete_board(board_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> dict[str, bool]:
     return {"success": client.delete_board(board_id)}
 
 
@@ -284,7 +283,7 @@ async def delete_board(board_id: str, client: TrelloClient = Depends(get_authent
 # ------------------------------------------------------------------ #
 
 
-@app.get("/boards/{board_id}/issues", response_model=List[IssueResponse])
+@app.get("/boards/{board_id}/issues", response_model=list[IssueResponse])
 async def get_issues(board_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> list[IssueResponse]:
     return [_issue_to_response(issue) for issue in client.get_issues(board_id)]
 
@@ -331,8 +330,8 @@ async def update_issue(
     )
 
 
-@app.delete("/issues/{issue_id}", response_model=Dict[str, bool])
-async def delete_issue(issue_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> Dict[str, bool]:
+@app.delete("/issues/{issue_id}", response_model=dict[str, bool])
+async def delete_issue(issue_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> dict[str, bool]:
     return {"success": client.delete_issue(issue_id)}
 
 
@@ -341,7 +340,7 @@ async def delete_issue(issue_id: str, client: TrelloClient = Depends(get_authent
 # ------------------------------------------------------------------ #
 
 
-@app.get("/boards/{board_id}/lists", response_model=List[ListResponse])
+@app.get("/boards/{board_id}/lists", response_model=list[ListResponse])
 async def get_lists(board_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> list[ListResponse]:
     return [_list_to_response(lst) for lst in client.get_lists(board_id)]
 
@@ -365,12 +364,12 @@ async def update_list(
     return _list_to_response(client.update_list(list_id=list_id, name=body.name))
 
 
-@app.delete("/lists/{list_id}", response_model=Dict[str, bool])
-async def delete_list(list_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> Dict[str, bool]:
+@app.delete("/lists/{list_id}", response_model=dict[str, bool])
+async def delete_list(list_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> dict[str, bool]:
     return {"success": client.delete_list(list_id)}
 
 
-@app.get("/lists/{list_id}/issues", response_model=List[IssueResponse])
+@app.get("/lists/{list_id}/issues", response_model=list[IssueResponse])
 async def get_issues_in_list(
     list_id: str,
     max_issues: int = Query(100, ge=1, le=500),
@@ -384,26 +383,26 @@ async def get_issues_in_list(
 # ------------------------------------------------------------------ #
 
 
-@app.post("/boards/{board_id}/members", response_model=Dict[str, bool])
+@app.post("/boards/{board_id}/members", response_model=dict[str, bool])
 async def add_member_to_board(
     board_id: str,
     body: AddMemberToBoardRequest,
     client: TrelloClient = Depends(get_authenticated_client),
-) -> Dict[str, bool]:
+) -> dict[str, bool]:
     return {"success": client.add_member_to_board(board_id=board_id, member_id=body.member_id)}
 
 
-@app.get("/issues/{issue_id}/members", response_model=List[MemberResponse])
+@app.get("/issues/{issue_id}/members", response_model=list[MemberResponse])
 async def get_issue_members(
     issue_id: str, client: TrelloClient = Depends(get_authenticated_client)
 ) -> list[MemberResponse]:
     return [_member_to_response(m) for m in client.get_members_on_issue(issue_id)]
 
 
-@app.post("/issues/{issue_id}/assign", response_model=Dict[str, bool])
+@app.post("/issues/{issue_id}/assign", response_model=dict[str, bool])
 async def assign_issue(
     issue_id: str, body: AssignIssueRequest, client: TrelloClient = Depends(get_authenticated_client)
-) -> Dict[str, bool]:
+) -> dict[str, bool]:
     success = client.assign_issue(issue_id=issue_id, member_id=body.member_id)
     return {"success": success}
 
