@@ -1,6 +1,7 @@
 """Unit tests for FastAPI service endpoints in main.py."""
 
 from collections.abc import Generator
+from types import ModuleType
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,6 +12,7 @@ from issue_tracker_client_api.exceptions import (
     ResourceNotFoundError,
     ServiceUnavailableError,
 )
+import issue_tracker_service.main as main_module
 from issue_tracker_service.main import app, get_authenticated_client
 
 
@@ -137,6 +139,41 @@ class TestHealthEndpoints:
         assert data["status"] == "ok"
         # With DATABASE_URL set (conftest uses SQLite), the response includes DB status
         assert data.get("database") == "connected"
+
+
+@pytest.mark.unit
+class TestSharedApiExceptionLoading:
+    """Test optional loading of shared `api.exceptions` classes."""
+
+    def test_load_shared_exceptions_returns_empty_when_module_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def _raise_missing(_name: str) -> ModuleType:
+            raise ModuleNotFoundError
+
+        monkeypatch.setattr(main_module, "import_module", _raise_missing)
+        assert main_module._load_shared_api_exception_types() == {}
+
+    def test_load_shared_exceptions_filters_non_exception_values(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class SharedAuthError(Exception):
+            pass
+
+        class SharedNotFoundError(Exception):
+            pass
+
+        fake_module = ModuleType("api.exceptions")
+        fake_module.AuthenticationError = SharedAuthError
+        fake_module.ObjectNotFoundError = SharedNotFoundError
+        fake_module.ValidationError = "not-a-class"
+
+        monkeypatch.setattr(main_module, "import_module", lambda _name: fake_module)
+
+        loaded = main_module._load_shared_api_exception_types()
+        assert loaded["AuthenticationError"] is SharedAuthError
+        assert loaded["ObjectNotFoundError"] is SharedNotFoundError
+        assert "ValidationError" not in loaded
 
 
 @pytest.mark.unit

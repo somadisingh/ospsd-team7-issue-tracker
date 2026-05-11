@@ -10,6 +10,7 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from importlib import import_module
 
 import issue_tracker_client_api
 from api.issue import Status
@@ -38,6 +39,29 @@ logger = logging.getLogger(__name__)
 def _set_error_kind(request: Request, *, kind: str) -> None:
     """Store domain vs infrastructure error class for telemetry middleware."""
     request.state.error_kind = kind
+
+
+def _load_shared_api_exception_types() -> dict[str, type[Exception]]:
+    """Best-effort loader for optional shared `api.exceptions` types."""
+    try:
+        module = import_module("api.exceptions")
+    except ModuleNotFoundError:
+        return {}
+
+    shared_names = (
+        "ObjectNotFoundError",
+        "ResourceNotFoundError",
+        "AuthenticationError",
+        "ValidationError",
+        "ServiceUnavailableError",
+        "IssueTrackerError",
+    )
+    loaded: dict[str, type[Exception]] = {}
+    for name in shared_names:
+        exc_cls = getattr(module, name, None)
+        if isinstance(exc_cls, type) and issubclass(exc_cls, Exception):
+            loaded[name] = exc_cls
+    return loaded
 
 
 @asynccontextmanager
@@ -112,6 +136,58 @@ async def _issue_tracker_error_handler(request: Request, exc: IssueTrackerError)
         status_code=500,
         content={"detail": f"Upstream service error: {exc}"},
     )
+
+
+async def _shared_not_found_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    _set_error_kind(request, kind="domain")
+    logger.warning("Shared API resource not found: %s", exc)
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+async def _shared_authentication_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    _set_error_kind(request, kind="domain")
+    logger.warning("Shared API authentication error: %s", exc)
+    return JSONResponse(status_code=401, content={"detail": str(exc)})
+
+
+async def _shared_validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    _set_error_kind(request, kind="domain")
+    logger.warning("Shared API validation error: %s", exc)
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+async def _shared_service_unavailable_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    _set_error_kind(request, kind="infrastructure")
+    logger.error("Shared API service unavailable: %s", exc)
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+
+async def _shared_issue_tracker_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    _set_error_kind(request, kind="infrastructure")
+    logger.error("Shared API issue tracker error: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Upstream service error: {exc}"},
+    )
+
+
+def _register_shared_api_exception_handlers() -> None:
+    """Register optional handlers for shared `api.exceptions` hierarchy."""
+    shared_exceptions = _load_shared_api_exception_types()
+    if not shared_exceptions:
+        return
+
+    for exc_name in ("ObjectNotFoundError", "ResourceNotFoundError"):
+        if exc_cls := shared_exceptions.get(exc_name):
+            app.add_exception_handler(exc_cls, _shared_not_found_error_handler)
+    if exc_cls := shared_exceptions.get("AuthenticationError"):
+        app.add_exception_handler(exc_cls, _shared_authentication_error_handler)
+    if exc_cls := shared_exceptions.get("ValidationError"):
+        app.add_exception_handler(exc_cls, _shared_validation_error_handler)
+    if exc_cls := shared_exceptions.get("ServiceUnavailableError"):
+        app.add_exception_handler(exc_cls, _shared_service_unavailable_error_handler)
+    if exc_cls := shared_exceptions.get("IssueTrackerError"):
+        app.add_exception_handler(exc_cls, _shared_issue_tracker_error_handler)
 
 
 # ------------------------------------------------------------------ #
@@ -407,4 +483,5 @@ async def assign_issue(
     return {"success": success}
 
 
+_register_shared_api_exception_handlers()
 setup_telemetry(app)
