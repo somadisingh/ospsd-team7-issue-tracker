@@ -680,7 +680,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?rev=tct297%2Fadd-uv" },
+    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?rev=5fde7fe514b7082ae28340c27a21fd7d22c42481" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.14.0" },
@@ -1429,7 +1429,7 @@ wheels = [
 [[package]]
 name = "ospd-issue-tracker-api"
 version = "0.1.0"
-source = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?rev=tct297%2Fadd-uv#5fde7fe514b7082ae28340c27a21fd7d22c42481" }
+source = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?rev=5fde7fe514b7082ae28340c27a21fd7d22c42481#5fde7fe514b7082ae28340c27a21fd7d22c42481" }
 
 [[package]]
 name = "ospsd-team-07"
@@ -1480,7 +1480,7 @@ requires-dist = [
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9.6.0" },
     { name = "mkdocstrings-python", marker = "extra == 'dev'", specifier = ">=1.16.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.15.0" },
-    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?rev=tct297%2Fadd-uv" },
+    { name = "ospd-issue-tracker-api", git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git?rev=5fde7fe514b7082ae28340c27a21fd7d22c42481" },
     { name = "pymdown-extensions", marker = "extra == 'dev'", specifier = ">=10.14.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },

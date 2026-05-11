@@ -89,11 +89,22 @@ class TrelloClient(Client):
 
         self._oauth: OAuth1 | None = None
         if all(oauth_parts):
-            assert self.secret is not None
-            assert self._access_token is not None
-            assert self._access_token_secret is not None
+            secret = self.secret
+            access_token_value = self._access_token
+            access_token_secret_value = self._access_token_secret
+            if (
+                secret is None
+                or access_token_value is None
+                or access_token_secret_value is None
+            ):
+                raise ValueError(
+                    "Trello OAuth requires api_key, secret, access_token, and access_token_secret"
+                )
             self._oauth = OAuth1(
-                api_key, self.secret, self._access_token, self._access_token_secret
+                api_key,
+                secret,
+                access_token_value,
+                access_token_secret_value,
             )
 
     # ------------------------------------------------------------------ #

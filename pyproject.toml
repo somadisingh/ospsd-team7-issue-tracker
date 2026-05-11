@@ -23,7 +23,7 @@ issue-tracker-adapter = { workspace = true }
 issue-tracker-service-client = { workspace = true }
 ai-client-api = { workspace = true }
 claude-ai-client-impl = { workspace = true }
-ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git", rev = "tct297/add-uv" }
+ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git", rev = "5fde7fe514b7082ae28340c27a21fd7d22c42481" }
 chat-client-impl = { workspace = true }
 chat-client-api = { git = "https://github.com/HarshithKoriRaj/Shared-API", rev = "main" }
 # Cross-vertical (HW3 §5): Team 9's published Slack ChatClient, pulled via
