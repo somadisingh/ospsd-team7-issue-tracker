@@ -151,11 +151,8 @@ jobs:
     steps:
       - checkout
       - run:
-          name: GCP Cloud Build (optional Terraform apply)
-          command: |
-            apt-get update -qq &&
-              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl unzip >/dev/null
-            bash .circleci/gcp_deploy.sh
+          name: GCP Cloud Build and Cloud Run rollout
+          command: bash .circleci/gcp_deploy.sh
 
 workflows:
   version: 2

@@ -295,6 +295,14 @@ resource "google_cloud_run_v2_service" "issue_tracker" {
     google_artifact_registry_repository.docker,
     google_secret_manager_secret_iam_member.run_accessor,
   ]
+
+  # App releases update the container image via CI (`gcloud run services update`).
+  # Terraform continues to own the rest of the service definition without reverting the image.
+  lifecycle {
+    ignore_changes = [
+      template[0].containers[0].image,
+    ]
+  }
 }
 
 resource "google_cloud_run_v2_service_iam_member" "public_invoker" {

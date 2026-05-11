@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# GCP deploy from CircleCI: Cloud Build push + optional Terraform apply.
+# GCP app deploy from CircleCI only (no Terraform). Infra is applied from your laptop.
 #
 # CircleCI env (Project Settings → Environment Variables):
 #   GCP_CI_DEPLOY=1                               — enable (otherwise exits 0)
@@ -10,9 +10,7 @@
 #   GCP_REGION (default us-central1)
 #   GCP_ARTIFACT_REPOSITORY_ID (default issue-tracker)
 #   GCP_CLOUD_RUN_IMAGE_NAME (default issue-tracker-service)
-#   GCP_TERRAFORM_STATE_BUCKET                    — enables terraform apply via GCS backend
-#   GCP_TERRAFORM_STATE_PREFIX (default ospsd-team-07/terraform)
-#   TRELLO_CALLBACK_URL                           — terraform -var when non-empty (Mode A)
+#   GCP_CLOUD_RUN_SERVICE_NAME (default issue-tracker-service) — must match Terraform cloud_run_service_name
 #
 set -euo pipefail
 
@@ -37,16 +35,13 @@ cd "${ROOT_DIR}"
 REGION="${GCP_REGION:-us-central1}"
 REPO="${GCP_ARTIFACT_REPOSITORY_ID:-issue-tracker}"
 IMAGE_NAME="${GCP_CLOUD_RUN_IMAGE_NAME:-issue-tracker-service}"
+CLOUD_RUN_SERVICE="${GCP_CLOUD_RUN_SERVICE_NAME:-issue-tracker-service}"
 SHORT_SHA="$(echo "${CIRCLE_SHA1}" | cut -c1-12)"
 BASE_URI="${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPO}/${IMAGE_NAME}"
 
 key_dir="$(mktemp -d)"
-tf_dl=""
 cleanup() {
   rm -rf "${key_dir:?}"
-  if [[ -n "${tf_dl}" ]]; then
-    rm -rf "${tf_dl:?}"
-  fi
 }
 trap cleanup EXIT
 
@@ -66,38 +61,34 @@ gcloud builds submit \
   --tag="${BASE_URI}:latest" \
   .
 
-if [[ -z "${GCP_TERRAFORM_STATE_BUCKET:-}" ]]; then
-  echo "GCP_TERRAFORM_STATE_BUCKET unset — skipping Terraform apply."
-  echo "After migrating state to GCS, set the bucket variable to roll out new image tags automatically."
-  exit 0
+# Cloud Build often ends up with only :latest in the registry when multiple
+# --tag flags are used; rollouts use the immutable :SHORT_SHA tag.
+if ! gcloud artifacts docker images describe "${BASE_URI}:${SHORT_SHA}" --quiet >/dev/null 2>&1; then
+  echo "Tag ${SHORT_SHA} missing after build; aliasing from :latest digest"
+  src_ref="$(
+    gcloud artifacts docker images describe "${BASE_URI}:latest" \
+      --format='value(image_summary.fully_qualified_digest)' 2>/dev/null || true
+  )"
+  if [[ -z "${src_ref}" ]]; then
+    dig="$(
+      gcloud artifacts docker images describe "${BASE_URI}:latest" \
+        --format='value(image_summary.digest)' 2>/dev/null || true
+    )"
+    if [[ -n "${dig}" ]]; then
+      src_ref="${BASE_URI}@${dig}"
+    fi
+  fi
+  if [[ -z "${src_ref}" ]]; then
+    echo "Could not resolve digest for ${BASE_URI}:latest (need image_summary from gcloud describe)"
+    exit 1
+  fi
+  gcloud artifacts docker tags add "${src_ref}" "${BASE_URI}:${SHORT_SHA}"
 fi
 
-PREFIX="${GCP_TERRAFORM_STATE_PREFIX:-ospsd-team-07/terraform}"
+echo "App deploy: updating Cloud Run service \"${CLOUD_RUN_SERVICE}\" to ${BASE_URI}:${SHORT_SHA}"
+gcloud run services update "${CLOUD_RUN_SERVICE}" \
+  --region="${REGION}" \
+  --image="${BASE_URI}:${SHORT_SHA}" \
+  --quiet
 
-tf_dl="$(mktemp -d)"
-
-TVER="${TERRAFORM_VERSION:-1.10.5}"
-curl -sSfL -o "${tf_dl}/terraform.zip" \
-  "https://releases.hashicorp.com/terraform/${TVER}/terraform_${TVER}_linux_amd64.zip"
-unzip -oq "${tf_dl}/terraform.zip" -d "${tf_dl}"
-chmod +x "${tf_dl}/terraform"
-TF_BIN="${tf_dl}/terraform"
-
-cd "${ROOT_DIR}/infrastructure/terraform"
-${TF_BIN} init -upgrade -input=false \
-  -backend-config="bucket=${GCP_TERRAFORM_STATE_BUCKET}" \
-  -backend-config="prefix=${PREFIX}"
-
-EXTRA_VARS=(
-  "-var=project_id=${GCP_PROJECT_ID}"
-  "-var=manage_secret_versions_in_terraform=false"
-  "-var=deploy_cloud_run_service=true"
-  "-var=image_tag=${SHORT_SHA}"
-)
-
-if [[ -n "${TRELLO_CALLBACK_URL:-}" ]]; then
-  EXTRA_VARS+=("-var=trello_callback_url=${TRELLO_CALLBACK_URL}")
-fi
-
-${TF_BIN} plan -input=false -lock-timeout=5m "${EXTRA_VARS[@]}"
-${TF_BIN} apply -auto-approve -input=false -lock-timeout=5m "${EXTRA_VARS[@]}"
+echo "Done. Apply Terraform from your laptop when infrastructure (not app image) changes."
