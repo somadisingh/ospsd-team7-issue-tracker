@@ -184,7 +184,7 @@ Current state and next steps:
 
 | Requirement       | Status                               | Plan                                                  |
 | ----------------- | ------------------------------------ | ----------------------------------------------------- |
-| IaC               | Render service + envs configured manually. | Move to a `render.yaml` (Render Blueprint) committed to the repo, or Terraform with the Render provider. |
+| IaC               | Terraform-managed Cloud Run + Secret Manager in `infrastructure/terraform/`. | Keep Terraform as the single source of truth; avoid parallel manual platform configs. |
 | Request latency   | Not yet emitted.                     | Add a FastAPI middleware that times each request and exports Prometheus metrics at `/metrics`; scrape with Grafana Cloud or Render's built-in metrics. |
 | Success / failure | Not yet emitted.                     | Counter metric keyed by `{route, status_code}`; derive rates in Grafana. |
 | Dashboards        | —                                    | Grafana Cloud free tier + scrape `/metrics`. |

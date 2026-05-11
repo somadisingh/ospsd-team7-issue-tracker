@@ -36,6 +36,11 @@ from .telemetry import setup_telemetry
 logger = logging.getLogger(__name__)
 
 
+def _set_error_kind(request: Request, *, kind: str) -> None:
+    """Store domain vs infrastructure error class for telemetry middleware."""
+    request.state.error_kind = kind
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     init_db()
@@ -81,24 +86,28 @@ except ImportError as _ai_import_err:  # pragma: no cover
 
 @app.exception_handler(ResourceNotFoundError)
 async def _resource_not_found_handler(request: Request, exc: ResourceNotFoundError) -> JSONResponse:
+    _set_error_kind(request, kind="domain")
     logger.warning("Resource not found: %s", exc)
     return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
 @app.exception_handler(AuthenticationError)
 async def _authentication_error_handler(request: Request, exc: AuthenticationError) -> JSONResponse:
+    _set_error_kind(request, kind="domain")
     logger.warning("Upstream authentication error: %s", exc)
     return JSONResponse(status_code=401, content={"detail": str(exc)})
 
 
 @app.exception_handler(ServiceUnavailableError)
 async def _service_unavailable_handler(request: Request, exc: ServiceUnavailableError) -> JSONResponse:
+    _set_error_kind(request, kind="infrastructure")
     logger.error("Upstream service unavailable: %s", exc)
     return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 
 @app.exception_handler(IssueTrackerError)
 async def _issue_tracker_error_handler(request: Request, exc: IssueTrackerError) -> JSONResponse:
+    _set_error_kind(request, kind="infrastructure")
     logger.error("Issue tracker error: %s", exc)
     return JSONResponse(
         status_code=500,

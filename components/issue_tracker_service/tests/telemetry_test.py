@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from issue_tracker_service.telemetry import _classify_outcome
+from issue_tracker_service.telemetry import _classify_outcome, _resolve_failure_kind
 
 
 @pytest.mark.unit
@@ -36,3 +36,11 @@ def test_classify_outcome_splits_domain_vs_infrastructure() -> None:
     assert _classify_outcome(200) == ("success", "none")
     assert _classify_outcome(404) == ("failure", "domain")
     assert _classify_outcome(500) == ("failure", "infrastructure")
+
+
+@pytest.mark.unit
+def test_resolve_failure_kind_prefers_explicit_kind_for_failures() -> None:
+    assert _resolve_failure_kind(500, "domain") == ("failure", "domain")
+    assert _resolve_failure_kind(404, "infrastructure") == ("failure", "infrastructure")
+    assert _resolve_failure_kind(404, None) == ("failure", "domain")
+    assert _resolve_failure_kind(200, "infrastructure") == ("success", "none")

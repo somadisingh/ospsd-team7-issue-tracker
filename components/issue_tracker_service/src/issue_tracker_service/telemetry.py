@@ -94,6 +94,15 @@ def _classify_outcome(status_code: int) -> tuple[str, str]:
     return ("failure", "infrastructure")
 
 
+def _resolve_failure_kind(status_code: int, error_kind: str | None) -> tuple[str, str]:
+    outcome, derived_kind = _classify_outcome(status_code)
+    if outcome == "success":
+        return outcome, "none"
+    if error_kind in {"domain", "infrastructure"}:
+        return outcome, error_kind
+    return outcome, derived_kind
+
+
 def _prometheus_enabled() -> bool:
     v = os.environ.get("PROMETHEUS_METRICS_ENABLED", "true").strip().lower()
     return v not in ("0", "false", "no", "off")
@@ -198,7 +207,8 @@ def setup_telemetry(app: FastAPI) -> None:
             route = _route_template_for_metrics(request)
             method = request.method
             status = str(sc)
-            outcome, failure_kind = _classify_outcome(sc)
+            explicit_error_kind = getattr(request.state, "error_kind", None)
+            outcome, failure_kind = _resolve_failure_kind(sc, explicit_error_kind)
 
             if request_duration is not None and response_counter is not None:
                 attrs = {
@@ -206,6 +216,7 @@ def setup_telemetry(app: FastAPI) -> None:
                     "http.route": route,
                     "http.status_code": status,
                     "status.class": status_class,
+                    "error.kind": failure_kind,
                 }
                 request_duration.record(elapsed, attrs)
                 response_counter.add(1, attrs)

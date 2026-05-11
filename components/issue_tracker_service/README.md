@@ -73,7 +73,7 @@ The service always exposes Prometheus metrics at **`GET /metrics`** (disable wit
 - `issue_tracker_http_requests_total` with labels `method`, `route`, `status`
 - `issue_tracker_http_request_outcomes_total` with labels `method`, `route`, `status`, `outcome`, `failure_kind`
 
-`failure_kind` values are `domain` for 4xx and `infrastructure` for 5xx; success responses use `none`.
+`failure_kind` values are `domain`, `infrastructure`, or `none`; exception handlers set `request.state.error_kind` so domain/infrastructure classification is explicit even when status class alone is ambiguous.
 
 **OTel metrics (when OTLP is configured):** `http.server.request.duration`, `http.server.responses` with route/method/status attributes.
 
@@ -134,8 +134,7 @@ Production hosting is modeled with **GCP Cloud Run + Terraform** at [`infrastruc
 | Setting            | Value                                                                       |
 | ------------------ | --------------------------------------------------------------------------- |
 | **Platform (GCP)** | [Google Cloud Run](https://cloud.google.com/run) + Terraform in-repo        |
-| **Platform (alt)** | [Render](https://render.com) via root [`render.yaml`](../../../render.yaml) |
-| **Example URLs**   | Cloud Run: `terraform output -raw service_url` · Render: team URL in root README |
+| **Example URLs**   | Cloud Run: `terraform output -raw service_url` |
 
 On **`main`**, CircleCI **`deploy_gcp`** can **`gcloud builds submit`** and optionally **`terraform apply`** once you configure GCP env vars (**`infrastructure/terraform/README.md`** → *Automate deploys on `main`*).
 

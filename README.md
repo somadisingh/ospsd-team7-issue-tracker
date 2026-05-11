@@ -221,86 +221,9 @@ Production-style hosting is modeled in Terraform under **`infrastructure/terrafo
 - `DATABASE_URL` remains your **Supabase** (or Cloud SQL, etc.) DSN—the database is independent of GCP unless you relocate it later.
 - Trello OAuth: Cloud Run assigns the hostname on first revision. Run **`terraform output trello_callback_hint`** after the initial deploy and set **`trello_callback_url`** to that URL on the next apply.
 
-### Deployment with Render Blueprint
+### Legacy Render note
 
-The project uses a **Render Blueprint** ([`render.yaml`](render.yaml)) to define all infrastructure as code. When the repository is connected to Render, the platform reads `render.yaml` and automatically provisions and configures the declared resources.
-
-**How it works:**
-
-1. `render.yaml` lives in the repository root and declares the web service, database, and environment variables.
-2. When you connect the repo to Render (Dashboard → New → Blueprint → select this GitHub repo), Render syncs infrastructure state with the blueprint definition.
-3. On every push to the `main` branch, Render pulls the latest code, runs the build, executes pre-deploy commands (migrations), and starts the service.
-
-**What `render.yaml` defines:**
-
-| Resource | Configuration |
-|---|---|
-| **Web Service** | `issue-tracker-service` — Python runtime, starter plan, health check at `/health` |
-| **Database** | `issue-tracker-db` — PostgreSQL (`issue_tracker` database), starter plan |
-| **Build** | `pip install uv && uv sync --all-extras` |
-| **Start** | `uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port $PORT` |
-| **Pre-deploy** | Installs dependencies and runs Alembic migrations before each deploy |
-
-#### DATABASE_URL provisioning
-
-The `DATABASE_URL` environment variable is **automatically provisioned** by Render. In `render.yaml`, it is mapped from the blueprint database definition:
-
-```yaml
-- key: DATABASE_URL
-  fromDatabase:
-    name: issue-tracker-db
-    property: connectionString
-```
-
-Render creates the PostgreSQL instance and injects the connection string into the web service at runtime. No manual configuration is needed for the database URL.
-
-#### Setting secrets in the Render dashboard
-
-Several environment variables contain sensitive values and are marked with `sync: false` in `render.yaml`. This means they are **not** stored in version control — you must set them manually in the Render dashboard.
-
-**Steps:** Render Dashboard → select `issue-tracker-service` → Environment → add each variable.
-
-| Variable | Description | Where to get it |
-|---|---|---|
-| `TRELLO_API_KEY` | Trello API key for OAuth | [Trello Power-Up Admin](https://trello.com/power-ups/admin) |
-| `TRELLO_API_SECRET` | Trello API secret (consumer secret) | Same Trello Power-Up Admin page |
-| `ANTHROPIC_API_KEY` | Anthropic API key for AI features | [Anthropic Console](https://console.anthropic.com/) |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint URL (e.g. Grafana, Honeycomb) | Your observability backend account |
-| `OTEL_EXPORTER_OTLP_HEADERS` | Auth headers for OTLP export (e.g. `Authorization=Basic%20...`) | Your observability backend account |
-
-**Non-secret variables** (set automatically from `render.yaml`):
-
-| Variable | Value |
-|---|---|
-| `OTEL_SERVICE_NAME` | `issue-tracker-service` |
-| `TRELLO_CALLBACK_URL` | `https://ospsd-team7-issue-tracker.onrender.com/auth/callback` |
-| `AI_ALLOW_MUTATIONS` | `true` |
-| `OTEL_SDK_DISABLED` | `false` |
-
-### Database Migrations
-
-Database schema changes are managed by **Alembic**. Migrations run automatically on every deploy via the `preDeployCommand` in `render.yaml`:
-
-```
-pip install uv && uv sync --all-extras && cd components/issue_tracker_service && uv run alembic upgrade head
-```
-
-This ensures the database schema is always up-to-date before the new version of the service starts accepting traffic.
-
-**Running migrations locally:**
-
-```bash
-cd components/issue_tracker_service
-export DATABASE_URL="postgresql+psycopg://user:pass@localhost:5432/issue_tracker"
-uv run alembic upgrade head
-```
-
-**Creating a new migration:**
-
-```bash
-cd components/issue_tracker_service
-uv run alembic revision --autogenerate -m "describe your change"
-```
+The repository previously documented a Render Blueprint flow. Infrastructure is now standardized on Terraform under `infrastructure/terraform/`, with secrets sourced from GCP Secret Manager. Historical Render instructions were removed to keep deployment guidance unambiguous.
 
 ### Database Migrations (Cloud Run / Docker image)
 
@@ -382,9 +305,8 @@ Every push triggers the following CircleCI workflow (see [`.circleci/config.yml`
 1. **`lint`** — Ruff (check + format) and Mypy
 2. **`test`** — Unit, integration, and E2E tests with coverage reporting
 3. **`health_check`** — Starts the service locally and verifies `GET /health` returns 200
-4. **`validate_infra`** — Validates Terraform (`terraform fmt`/validate with `-backend=false`) and `render.yaml` syntax
-5. **`deploy`** — Triggers a Render deploy hook after lint, test, and health_check (skips if hook URL unset)
-6. **`deploy_gcp`** (**`main`** only, after `validate_infra`) — Cloud Build pushes the Docker image (`:latest` + commit SHA). Optional **`terraform apply`** when `GCP_CI_DEPLOY`, service-account env vars, and (optionally) `GCP_TERRAFORM_STATE_BUCKET` are configured — see **[`infrastructure/terraform/README.md`](infrastructure/terraform/README.md)** (Automate deploys).
+4. **`validate_infra`** — Validates Terraform (`terraform fmt`/validate with `-backend=false`)
+5. **`deploy_gcp`** (**`main`** only, after `validate_infra`) — Cloud Build pushes the Docker image (`:latest` + commit SHA). Optional **`terraform apply`** when `GCP_CI_DEPLOY`, service-account env vars, and (optionally) `GCP_TERRAFORM_STATE_BUCKET` are configured — see **[`infrastructure/terraform/README.md`](infrastructure/terraform/README.md)** (Automate deploys).
 
 ### A note on OAuth
 
