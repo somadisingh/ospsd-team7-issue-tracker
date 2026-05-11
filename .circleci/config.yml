@@ -144,28 +144,6 @@ jobs:
             terraform fmt -check -recursive
             terraform init -backend=false -input=false
             terraform validate
-      - run:
-          name: Validate render.yaml
-          command: |
-            pip install pyyaml
-            python -c "import yaml; yaml.safe_load(open('render.yaml'))"
-
-  deploy:
-    docker:
-      - image: cimg/python:3.12
-    steps:
-      - run:
-          name: Trigger Render deploy
-          command: |
-            if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-              echo "RENDER_DEPLOY_HOOK_URL not set; skipping deploy"
-              exit 0
-            fi
-            curl -X POST -f -s -o /dev/null -w "%{http_code}" "$RENDER_DEPLOY_HOOK_URL" | grep -qE '^2[0-9]{2}$' || {
-              echo "Render deploy hook returned non-2xx"
-              exit 1
-            }
-            echo "Render deploy triggered successfully"
 
   deploy_gcp:
     docker:
@@ -187,11 +165,6 @@ workflows:
       - test
       - health_check
       - validate_infra
-      - deploy:
-          requires:
-            - lint
-            - test
-            - health_check
       - deploy_gcp:
           requires:
             - lint
