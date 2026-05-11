@@ -192,6 +192,33 @@ class TestAuthLogin:
 
         assert response.status_code == 500
 
+    @patch("issue_tracker_service.routes.auth._trello_config")
+    @patch("issue_tracker_service.routes.auth.TrelloClient")
+    def test_login_derives_callback_from_request_when_env_missing(
+        self,
+        mock_client_cls: MagicMock,
+        mock_config: MagicMock,
+    ) -> None:
+        mock_config.return_value = {
+            "api_key": "k",
+            "secret": "s",
+            "callback_url": "",
+        }
+        mock_instance = MagicMock()
+        mock_instance.get_authorization_url.return_value = (
+            "https://trello.com/1/OAuthAuthorizeToken?oauth_token=req_tok_123"
+        )
+        mock_instance.request_token_secret = "req_secret"
+        mock_client_cls.return_value = mock_instance
+
+        with TestClient(app, follow_redirects=False) as client:
+            response = client.get("/auth/login")
+
+        assert response.status_code == 302
+        mock_instance.get_authorization_url.assert_called_once_with(
+            callback_url="http://testserver/auth/callback"
+        )
+
 
 @pytest.mark.unit
 class TestGetAuthenticatedClient:

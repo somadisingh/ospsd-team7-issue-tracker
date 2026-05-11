@@ -5,7 +5,7 @@ from typing import Dict
 from urllib.parse import parse_qs, urlencode, urlparse
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -54,12 +54,12 @@ def _trello_config() -> Dict[str, str]:
     return {
         "api_key": api_key,
         "secret": secret,
-        "callback_url": os.getenv("TRELLO_CALLBACK_URL", "http://localhost:8000/auth/callback"),
+        "callback_url": os.getenv("TRELLO_CALLBACK_URL", "").strip(),
     }
 
 
 @router.get("/login")
-async def auth_login() -> RedirectResponse:
+async def auth_login(request: Request) -> RedirectResponse:
     """Initiate OAuth 1.0 flow with Trello.
 
     Redirects user to Trello authorization page.
@@ -71,8 +71,9 @@ async def auth_login() -> RedirectResponse:
         HTTPException: If request token fetch fails.
     """
     config = _trello_config()
+    callback_url = config["callback_url"] or f"{str(request.base_url).rstrip('/')}/auth/callback"
     client = TrelloClient(api_key=config["api_key"], secret=config["secret"])
-    auth_url = client.get_authorization_url(callback_url=config["callback_url"])
+    auth_url = client.get_authorization_url(callback_url=callback_url)
     parsed = parse_qs(urlparse(auth_url).query)
     request_token = parsed.get("oauth_token", [None])[0]
     if not request_token:

@@ -52,7 +52,7 @@ Browser/Client
 | `TRELLO_API_KEY`      | Yes      | Trello API key                                                         |
 | `TRELLO_API_SECRET`   | Yes      | Trello API secret (consumer secret)                                    |
 | `DATABASE_URL`        | Yes      | SQLAlchemy URL (e.g. Postgres on Render, Supabase, or local SQLite/Postgres) |
-| `TRELLO_CALLBACK_URL` | No       | OAuth callback URL (defaults to `http://localhost:8000/auth/callback`) |
+| `TRELLO_CALLBACK_URL` | No       | OAuth callback URL. If unset, `/auth/login` derives it from the incoming request host (`https://<host>/auth/callback`). |
 
 ### Telemetry (Prometheus + optional OpenTelemetry)
 
