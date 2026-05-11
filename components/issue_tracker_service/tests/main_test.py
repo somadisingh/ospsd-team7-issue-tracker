@@ -145,18 +145,14 @@ class TestHealthEndpoints:
 class TestSharedApiExceptionLoading:
     """Test optional loading of shared `api.exceptions` classes."""
 
-    def test_load_shared_exceptions_returns_empty_when_module_missing(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_load_shared_exceptions_returns_empty_when_module_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _raise_missing(_name: str) -> ModuleType:
             raise ModuleNotFoundError
 
         monkeypatch.setattr(main_module, "import_module", _raise_missing)
         assert main_module._load_shared_api_exception_types() == {}
 
-    def test_load_shared_exceptions_filters_non_exception_values(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_load_shared_exceptions_filters_non_exception_values(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class SharedAuthError(Exception):
             pass
 
