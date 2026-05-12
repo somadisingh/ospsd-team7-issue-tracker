@@ -4,7 +4,7 @@ Anthropic Claude implementation of the `ai_client_api.AIClient` ABC.
 
 ## Modules
 
-| File            | Role                                                                  |
+| Files           | Role                                                                  |
 | --------------- | --------------------------------------------------------------------- |
 | `client.py`     | `ClaudeAIClient` — runs the Claude tool-use loop.                     |
 | `config.py`     | `ClaudeConfig` — env-driven knobs (model, hop limit, mutations flag). |
