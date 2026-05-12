@@ -17,66 +17,174 @@
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "id": null,
   "links": [],
-  "liveNow": false,
   "panels": [
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 15,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 4,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 1.5
-              }
-            ]
-          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(http_server_responses_total[$__rate_interval]))",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP Response Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
           "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[$__rate_interval])) by (le))",
+          "refId": "A"
+        }
+      ],
+      "title": "P95 Server Latency",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(http_server_request_duration_seconds_sum[$__rate_interval])) / clamp_min(sum(rate(http_server_request_duration_seconds_count[$__rate_interval])), 1e-9)",
+          "refId": "A"
+        }
+      ],
+      "title": "Average Server Latency",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(http_server_active_requests)",
+          "refId": "A"
+        }
+      ],
+      "title": "Active Requests",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
         },
         "overrides": []
       },
@@ -84,12 +192,11 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 0
+        "y": 6
       },
-      "id": 1,
+      "id": 5,
       "options": {
         "legend": {
-          "calcs": [],
           "displayMode": "table",
           "placement": "bottom",
           "showLegend": true
@@ -102,8 +209,49 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(issue_tracker_http_request_duration_seconds_bucket{route=~\"$route\",method=~\"$method\"}[5m])) by (le, route, method))",
-          "legendFormat": "{{method}} {{route}}",
+          "expr": "sum(rate(http_server_responses_total[$__rate_interval])) by (http_response_status_code)",
+          "legendFormat": "{{http_response_status_code}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Responses by Status Code",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[$__rate_interval])) by (le, http_route))",
+          "legendFormat": "{{http_route}}",
           "range": true,
           "refId": "A"
         }
@@ -114,145 +262,11 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 95
-              },
-              {
-                "color": "green",
-                "value": 98
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 12,
-        "y": 0
-      },
-      "id": 2,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "100 * sum(rate(issue_tracker_http_request_outcomes_total{outcome=\"success\",route=~\"$route\",method=~\"$method\"}[5m])) / clamp_min(sum(rate(issue_tracker_http_request_outcomes_total{route=~\"$route\",method=~\"$method\"}[5m])), 1e-9)",
-          "refId": "A"
-        }
-      ],
-      "title": "Success Rate (5m)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "max": 100,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 2
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 18,
-        "y": 0
-      },
-      "id": 3,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "editorMode": "code",
-          "expr": "100 * sum(rate(issue_tracker_http_request_outcomes_total{outcome=\"failure\",route=~\"$route\",method=~\"$method\"}[5m])) / clamp_min(sum(rate(issue_tracker_http_request_outcomes_total{route=~\"$route\",method=~\"$method\"}[5m])), 1e-9)",
-          "refId": "A"
-        }
-      ],
-      "title": "Failure Rate (5m)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "unit": "reqps"
+          "unit": "s"
         },
         "overrides": []
       },
@@ -260,12 +274,52 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 14
       },
-      "id": 4,
+      "id": 7,
       "options": {
         "legend": {
-          "calcs": [],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(http_client_duration_milliseconds_bucket[$__rate_interval])) by (le)) / 1000",
+          "legendFormat": "http_client_p95",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Outbound HTTP Client P95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "id": 8,
+      "options": {
+        "legend": {
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
@@ -278,41 +332,43 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(issue_tracker_http_request_outcomes_total{outcome=\"failure\",route=~\"$route\",method=~\"$method\"}[5m])) by (failure_kind)",
-          "legendFormat": "{{failure_kind}}",
+          "expr": "sum(rate(http_server_request_size_bytes_sum[$__rate_interval])) / clamp_min(sum(rate(http_server_request_size_bytes_count[$__rate_interval])), 1e-9)",
+          "legendFormat": "avg_request_size",
           "range": true,
           "refId": "A"
+        },
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(http_server_response_size_bytes_sum[$__rate_interval])) / clamp_min(sum(rate(http_server_response_size_bytes_count[$__rate_interval])), 1e-9)",
+          "legendFormat": "avg_response_size",
+          "range": true,
+          "refId": "B"
         }
       ],
-      "title": "Failure Rate by Kind",
+      "title": "Average Request/Response Size",
       "type": "timeseries"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
           "unit": "reqps"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 8
+        "w": 8,
+        "x": 0,
+        "y": 22
       },
-      "id": 5,
+      "id": 9,
       "options": {
         "legend": {
-          "calcs": [],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
@@ -324,13 +380,116 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "sum(rate(issue_tracker_http_requests_total{route=~\"$route\",method=~\"$method\"}[5m])) by (route, method, status)",
-          "legendFormat": "{{method}} {{route}} {{status}}",
+          "expr": "sum(rate(otel_sdk_span_started_total[$__rate_interval]))",
+          "legendFormat": "span_started",
           "range": true,
           "refId": "A"
+        },
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(otel_sdk_processor_span_processed_total[$__rate_interval]))",
+          "legendFormat": "span_processed",
+          "range": true,
+          "refId": "B"
         }
       ],
-      "title": "Request Throughput by Route/Status",
+      "title": "OTel Span Throughput",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 22
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "sum(otel_sdk_processor_span_queue_size)",
+          "legendFormat": "processor_queue",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "editorMode": "code",
+          "expr": "sum(otel_sdk_span_live)",
+          "legendFormat": "live_spans",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "OTel SDK Queue/Live Spans",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 22
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum(rate(traces_spanmetrics_latency_bucket[$__rate_interval])) by (le))",
+          "legendFormat": "spanmetrics_p95",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "editorMode": "code",
+          "expr": "sum(rate(traces_spanmetrics_calls_total[$__rate_interval]))",
+          "legendFormat": "spanmetrics_calls",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Trace SpanMetrics (Latency + Calls)",
       "type": "timeseries"
     }
   ],
@@ -338,52 +497,41 @@
   "schemaVersion": 39,
   "style": "dark",
   "tags": [
-    "ospsd",
-    "telemetry",
-    "rubric"
+    "issue-tracker",
+    "otel",
+    "prometheus",
+    "grafana-cloud"
   ],
   "templating": {
     "list": [
       {
         "current": {
           "selected": true,
-          "text": ".*",
-          "value": ".*"
+          "text": "grafanacloud-somadisingh-prom",
+          "value": "grafanacloud-somadisingh-prom"
         },
         "hide": 0,
         "includeAll": false,
-        "label": "Route Regex",
-        "name": "route",
+        "label": "Datasource",
+        "multi": false,
+        "name": "datasource",
         "options": [],
-        "query": ".*",
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
         "skipUrlSync": false,
-        "type": "textbox"
-      },
-      {
-        "current": {
-          "selected": true,
-          "text": ".*",
-          "value": ".*"
-        },
-        "hide": 0,
-        "includeAll": false,
-        "label": "Method Regex",
-        "name": "method",
-        "options": [],
-        "query": ".*",
-        "skipUrlSync": false,
-        "type": "textbox"
+        "type": "datasource"
       }
     ]
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Issue Tracker KPI Dashboard",
-  "uid": "issue-tracker-kpi",
+  "title": "Issue Tracker - Full Telemetry Dashboard",
+  "uid": "issue-tracker-full-telemetry",
   "version": 1,
   "weekStart": ""
 }
