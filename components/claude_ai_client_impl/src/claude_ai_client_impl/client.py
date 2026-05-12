@@ -38,6 +38,7 @@ from ai_client_api.structured_output import (
     system_prompt_with_structured_mode,
 )
 from ai_client_api.types import AIReply, ToolAction
+from opentelemetry import metrics as otel_metrics
 from prometheus_client import Counter, Histogram
 
 from claude_ai_client_impl.config import ClaudeConfig
@@ -90,6 +91,27 @@ _ai_anthropic_request_cost_usd = Histogram(
     "Estimated Anthropic request cost in USD per call.",
     labelnames=("model",),
     buckets=(0.0001, 0.0005, 0.001, 0.005, 0.01, 0.02, 0.05, 0.1, float("inf")),
+)
+_otel_meter = otel_metrics.get_meter(__name__)
+_otel_ai_anthropic_input_tokens = _otel_meter.create_counter(
+    "issue_tracker_ai_anthropic_input_tokens",
+    unit="1",
+    description="Anthropic input tokens consumed.",
+)
+_otel_ai_anthropic_output_tokens = _otel_meter.create_counter(
+    "issue_tracker_ai_anthropic_output_tokens",
+    unit="1",
+    description="Anthropic output tokens generated.",
+)
+_otel_ai_anthropic_cost_usd = _otel_meter.create_counter(
+    "issue_tracker_ai_anthropic_cost_usd",
+    unit="USD",
+    description="Estimated Anthropic cost in USD (cumulative).",
+)
+_otel_ai_anthropic_request_cost_usd = _otel_meter.create_histogram(
+    "issue_tracker_ai_anthropic_request_cost_usd",
+    unit="USD",
+    description="Estimated Anthropic cost in USD per request.",
 )
 
 
@@ -221,6 +243,13 @@ class ClaudeAIClient(AIClient):
             )
             _ai_anthropic_request_cost_usd.labels(model=self._config.model).observe(
                 estimated_cost
+            )
+            otel_attrs = {"model": self._config.model}
+            _otel_ai_anthropic_input_tokens.add(input_tokens, attributes=otel_attrs)
+            _otel_ai_anthropic_output_tokens.add(output_tokens, attributes=otel_attrs)
+            _otel_ai_anthropic_cost_usd.add(estimated_cost, attributes=otel_attrs)
+            _otel_ai_anthropic_request_cost_usd.record(
+                estimated_cost, attributes=otel_attrs
             )
         except Exception as exc:
             _anthropic_request_duration_seconds.labels(

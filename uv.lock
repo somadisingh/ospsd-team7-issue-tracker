@@ -309,6 +309,7 @@ dependencies = [
     { name = "anthropic" },
     { name = "chat-client-api" },
     { name = "issue-tracker-client-api" },
+    { name = "opentelemetry-api" },
     { name = "prometheus-client" },
     { name = "pydantic" },
 ]
@@ -326,6 +327,7 @@ requires-dist = [
     { name = "anthropic", specifier = ">=0.40.0" },
     { name = "chat-client-api", git = "https://github.com/HarshithKoriRaj/Shared-API?rev=main" },
     { name = "issue-tracker-client-api", editable = "components/issue_tracker_client_api" },
+    { name = "opentelemetry-api", specifier = ">=1.28.0" },
     { name = "prometheus-client", specifier = ">=0.23.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
