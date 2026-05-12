@@ -74,6 +74,22 @@ app = FastAPI(
     title="Issue Tracker Service",
     version="0.3.0",
     lifespan=lifespan,
+    openapi_tags=[
+        {
+            "name": "ai",
+            "description": (
+                "**Assistant** - tool-backed LLM access to the authenticated user's Trello and chat context "
+                "(see project docs for tool catalogue and safety rules).\n\n"
+                "**Provider** - `claude` (default) or `openai` is selected at deploy time via the `AI_PROVIDER` environment variable. "
+                "Changing provider requires a service restart or new revision.\n\n"
+                "**GET /ai/health** - Configuration probe only (no LLM call, no session). Suitable for load balancers and uptime checks.\n\n"
+                "**POST /ai/chat** - Requires `X-Session-Token`. "
+                "Returns `reply` and `actions` (tool results). Input is untrusted, it can trigger tools. "
+                "With `AI_STRUCTURED_OUTPUT=true`, the server validates the model's final structured JSON (Claude and OpenAI), "
+                "**422** only if that parse fails, uncommon when the model follows the contract. See `docs/ai-integration.md`."
+            ),
+        },
+    ],
 )
 
 # Allow the deployed frontend (and local dev server) to call us. The

@@ -292,11 +292,15 @@ See `tests/e2e/conftest.py` for the full list of required environment variables 
 
 ### Environment variables (Render dashboard / GCP Secret Manager / local)
 
-**Render:** Configure secrets and env vars in the Render service dashboard (see tables above). **GCP:** Production values for **`DATABASE_URL`**, **`TRELLO_*`**, and optional OTLP headers are modeled in **GCP Secret Manager** by Terraform (**Mode B** writes initial versions via vars; **Mode A** sets versions only in GCP). **Local dev:** copy **[`.env.example`](.env.example)** to `.env`.
+**Render:** Configure secrets and env vars in the Render service dashboard (see tables above). **GCP:** Production values for **`DATABASE_URL`**, **`TRELLO_*`**, and optional OTLP headers are modeled in **GCP Secret Manager** by Terraform (**Mode B** writes initial versions via vars; **Mode A** sets versions only in GCP). **Local dev:** copy **[`.env.example`](.env.example)** to `.env`. For AI, set **`ANTHROPIC_API_KEY`** (Claude, default) or **`AI_PROVIDER=openai`** with **`OPENAI_API_KEY`**. Optional: **`AI_STRUCTURED_OUTPUT`**, **`AI_HTTP_*`** retries, **`AI_ALLOW_MUTATIONS`**, **`OPENAI_MODEL`**, **`CLAUDE_MODEL`**. See **[`docs/ai-integration.md`](docs/ai-integration.md)** for behaviour, **`context["idempotency_key"]`** (OpenAI mutating dedupe), and the full variable matrix.
 
 | Variable | Description |
 |---|---|
 | `TRELLO_CALLBACK_URL` | Must match **`https://<cloud-run-host>/auth/callback`** (`terraform output trello_callback_hint`). |
+| `AI_PROVIDER` | `claude` (default) or `openai` — selects the LLM stack (`issue_tracker_service.ai_deps`). |
+| `OPENAI_API_KEY` / `OPENAI_MODEL` | Required when using OpenAI; model defaults to `gpt-4o-mini`. |
+| `AI_STRUCTURED_OUTPUT` | When `true`, final model output must validate as structured JSON (HTTP 422 on failure). |
+| `AI_HTTP_MAX_ATTEMPTS`, `AI_HTTP_RETRY_BASE_S`, `AI_HTTP_RETRY_MAX_S` | Retry/backoff around upstream LLM HTTP calls. |
 
 ### CI/CD pipeline
 

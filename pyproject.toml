@@ -12,6 +12,7 @@ dependencies = [
     "ospd-issue-tracker-api",
     "ai-client-api",
     "claude-ai-client-impl",
+    "openai-ai-client-impl",
     "chat-client-api",
     "chat-client-impl",
     "slack-client-impl",
@@ -23,6 +24,7 @@ issue-tracker-adapter = { workspace = true }
 issue-tracker-service-client = { workspace = true }
 ai-client-api = { workspace = true }
 claude-ai-client-impl = { workspace = true }
+openai-ai-client-impl = { workspace = true }
 ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git", rev = "5fde7fe514b7082ae28340c27a21fd7d22c42481" }
 chat-client-impl = { workspace = true }
 chat-client-api = { git = "https://github.com/HarshithKoriRaj/Shared-API", rev = "main" }
@@ -82,6 +84,8 @@ ignore = [
   "S106",    # Hardcoded password in function arg — same as above
   "S110",    # try/except/pass — expected pattern in exception tests
   "PLR2004", # Magic numbers — expected in test assertions
+  "N806",    # Uppercase model variables in tests (e.g. m0 vs model)
+  "PT018",   # Compound assertions in small tests
   "D100",    # Missing module docstring — test modules are self-documenting
   "D101",    # Missing class docstring — pytest Test* class names describe intent
   "D102",    # Missing docstring in method — test names are descriptive
@@ -123,6 +127,42 @@ ignore = [
   "TRY003",  # Long exception messages — user-facing error context
   "PLR0913", # Too many arguments — adapter mirrors interface signature
 ]
+"components/ai_client_api/src/ai_client_api/resilience.py" = [
+  "D102",
+  "D107",
+  "D202",
+  "TC003",
+  "UP047",
+  "S101",
+]
+"components/ai_client_api/src/ai_client_api/signature_tools.py" = [
+  "D102",
+  "TC003",
+  "D107",
+  "D401",
+  "ANN401",
+]
+"components/ai_client_api/src/ai_client_api/structured_output.py" = [
+  "TRY003",
+]
+# OpenAI AI implementation: mirrors Claude conventions.
+"components/openai_ai_client_impl/src/**/*.py" = [
+  "D102",
+  "D107",
+  "TRY003",
+  "BLE001",
+  "PLR0913",
+  "ANN401",
+  "C901",
+  "PLC0415",
+  "TC001",
+  "TC002",
+  "TC003",
+  "PERF401",
+  "PLR0912",
+  "PLR0915",
+  "TRY300",
+]
 # Claude AI implementation: similar to trello_client_impl conventions.
 "components/claude_ai_client_impl/src/**/*.py" = [
   "D102",    # Method docstrings redundant when interface documents them
@@ -155,7 +195,7 @@ ignore = [
 [tool.mypy]
 strict = true
 explicit_package_bases = true  # Required for src layout
-mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src", "components/issue_tracker_service/src", "components/issue_tracker_adapter/src", "components/issue_tracker_service_api_client", "components/ai_client_api/src", "components/claude_ai_client_impl/src", "components/chat_client_impl/src"]
+mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src", "components/issue_tracker_service/src", "components/issue_tracker_adapter/src", "components/issue_tracker_service_api_client", "components/ai_client_api/src", "components/claude_ai_client_impl/src", "components/openai_ai_client_impl/src", "components/chat_client_impl/src"]
 ignore_missing_imports = false
 warn_unused_ignores = false
 show_error_codes = true
@@ -175,6 +215,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "anthropic.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "openai.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
@@ -208,6 +252,7 @@ pythonpath = [
     "components/issue_tracker_service_api_client",
     "components/ai_client_api/src",
     "components/claude_ai_client_impl/src",
+    "components/openai_ai_client_impl/src",
 ]
 testpaths = ["tests", "components/*/tests"]
 python_files = ["*_test.py", "test_*.py", "*_tests.py"]

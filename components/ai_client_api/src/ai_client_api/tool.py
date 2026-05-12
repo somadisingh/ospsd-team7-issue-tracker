@@ -32,7 +32,7 @@ class Tool(Protocol):
 
     def run(self, arguments: dict[str, Any]) -> Any:  # noqa: ANN401 — opaque
         """Execute the tool and return a JSON-serializable result."""
-        ...
+        ...  # pragma: no cover
 
 
 @runtime_checkable
@@ -49,8 +49,8 @@ class ToolDispatcher(Protocol):
 
     def schemas(self) -> list[dict[str, Any]]:
         """Return the provider-facing schema list for all enabled tools."""
-        ...
+        ...  # pragma: no cover
 
     def dispatch(self, name: str, arguments: dict[str, Any]) -> Any:  # noqa: ANN401 — opaque
         """Run tool ``name`` with ``arguments`` and return its result."""
-        ...
+        ...  # pragma: no cover

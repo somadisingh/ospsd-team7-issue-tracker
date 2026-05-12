@@ -11,6 +11,9 @@ shared ``chat_client_api`` registry. The default ``"local"`` backend uses
 the seeded in-memory :class:`LocalChatClient`. Adding a new backend (e.g.
 Discord, Telegram) is one entry in ``_CHAT_BACKEND_PACKAGES`` plus the
 relevant impl pinned in ``pyproject.toml`` — no other code change.
+
+``AI_PROVIDER`` selects the LLM stack: ``claude`` (default) or ``openai``.
+Both implement :class:`ai_client_api.AIClient`.
 """
 
 from __future__ import annotations
@@ -19,7 +22,9 @@ import importlib
 import logging
 import os
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
+from ai_client_api.client import AIClient
 from chat_client_api import (  # type: ignore[import-untyped]
     ChatClient,
     get_client,
@@ -30,6 +35,9 @@ from sqlalchemy.orm import Session
 from claude_ai_client_impl import ClaudeAIClient, ClaudeConfig
 from issue_tracker_service.db import get_db, get_session_credentials
 from trello_client_impl.client import TrelloClient
+
+if TYPE_CHECKING:
+    from openai_ai_client_impl.config import OpenAIConfig
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +77,17 @@ def _claude_config() -> ClaudeConfig:
     return ClaudeConfig.from_env()
 
 
+@lru_cache(maxsize=1)
+def _openai_config() -> OpenAIConfig:
+    from openai_ai_client_impl.config import OpenAIConfig
+
+    return OpenAIConfig.from_env()
+
+
+def _ai_provider() -> str:
+    return os.getenv("AI_PROVIDER", "claude").strip().lower()
+
+
 def _authenticated_issue_tracker(
     x_session_token: str = Header(..., alias="X-Session-Token"),
     db: Session = Depends(get_db),
@@ -100,14 +119,27 @@ def _authenticated_issue_tracker(
 
 def get_ai_client(
     issue_tracker: TrelloClient = Depends(_authenticated_issue_tracker),
-) -> ClaudeAIClient:
-    """Build a request-scoped :class:`ClaudeAIClient`.
+) -> AIClient:
+    """Build a request-scoped :class:`AIClient` (Claude or OpenAI).
 
     The issue-tracker client is user-scoped (holds OAuth creds); the
-    chat client and Anthropic config are process-wide.
+    chat client and provider config are process-wide.
     """
+    chat = _chat_client()
+    provider = _ai_provider()
+    if provider == "openai":
+        from openai_ai_client_impl import OpenAIAIClient
+
+        return OpenAIAIClient(
+            issue_tracker=issue_tracker,
+            chat=chat,
+            config=_openai_config(),
+        )
+    if provider != "claude":
+        msg = f"Unknown AI_PROVIDER={provider!r}. Use 'claude' or 'openai'."
+        raise RuntimeError(msg)
     return ClaudeAIClient(
         issue_tracker=issue_tracker,
-        chat=_chat_client(),
+        chat=chat,
         config=_claude_config(),
     )

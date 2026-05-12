@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Generator
+from pathlib import Path
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, event
@@ -14,7 +15,14 @@ from sqlalchemy.pool import StaticPool
 
 from .base import Base
 
-load_dotenv()
+# Load the nearest `.env` walking upward from this file (repo root in this
+# workspace) so `uv run uvicorn …` works even when the process cwd is not the
+# monorepo root. Later assignments in `os.environ` still win (override=False).
+for _dir in Path(__file__).resolve().parents:
+    _env_file = _dir / ".env"
+    if _env_file.is_file():
+        load_dotenv(_env_file, override=False)
+        break
 
 _engine: Engine | None = None
 SessionLocal: sessionmaker[Session] | None = None

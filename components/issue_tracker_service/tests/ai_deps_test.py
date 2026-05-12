@@ -7,16 +7,29 @@ between backends is the ``CHAT_BACKEND`` env var.
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 from chat_client_api import ChatClient, register_client
 from chat_client_impl import LocalChatClient
 from chat_client_impl.slack import SlackChatAdapter
-from issue_tracker_service.ai_deps import _chat_client
+from issue_tracker_service.ai_deps import (
+    _chat_client,
+    _claude_config,
+    _openai_config,
+    get_ai_client,
+)
 
 
 @pytest.fixture(autouse=True)
 def _reset_chat_client_cache() -> None:
     _chat_client.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_ai_config_caches() -> None:
+    _claude_config.cache_clear()
+    _openai_config.cache_clear()
 
 
 @pytest.mark.unit
@@ -75,3 +88,28 @@ class TestChatBackendSelection:
         # The contract that matters: `client` came from get_client(),
         # which means whatever the registry holds is what callers see.
         assert isinstance(client, LocalChatClient)
+
+
+@pytest.mark.unit
+class TestAIProviderClient:
+    def test_get_ai_client_openai_stack(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("AI_PROVIDER", "openai")
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        from openai_ai_client_impl import OpenAIAIClient
+
+        client = get_ai_client(issue_tracker=MagicMock())
+        assert isinstance(client, OpenAIAIClient)
+
+    def test_unknown_ai_provider_raises(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("AI_PROVIDER", "gemini")
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-x")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
+        with pytest.raises(RuntimeError, match="Unknown AI_PROVIDER"):
+            get_ai_client(issue_tracker=MagicMock())

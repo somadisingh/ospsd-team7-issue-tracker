@@ -186,7 +186,7 @@ open htmlcov/index.html
 
 ### Coverage Settings
 
-- **Minimum threshold**: 85% (configured in `pyproject.toml`)
+- **Minimum threshold**: 90% (configured in `pyproject.toml`)
 - **Configuration file**: `.coveragerc`
 - **HTML output directory**: `htmlcov/`
 

@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Abstract interface for the AI assistant client (provider-agnostic)"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pydantic>=2.0",
+]
 
 [project.optional-dependencies]
 dev = [

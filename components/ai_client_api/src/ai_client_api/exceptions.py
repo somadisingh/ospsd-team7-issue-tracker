@@ -41,3 +41,16 @@ class AIToolHopLimitError(AIError):
     with ``AIReply.truncated=True`` instead. Raising is appropriate when
     there is no coherent partial reply to return.
     """
+
+
+class AIStructuredOutputError(AIError):
+    """Raised when the model output cannot be validated as structured data.
+
+    Used when ``AI_STRUCTURED_OUTPUT`` (or provider-specific structured mode)
+    is enabled and the final assistant payload is not valid JSON or fails
+    Pydantic validation.
+    """
+
+
+class AIRateLimitError(AIProviderError):
+    """Raised when the upstream provider signals rate limiting."""

@@ -7,7 +7,13 @@ from typing import Any, Iterator
 
 import pytest
 from ai_client_api.client import AIClient
-from ai_client_api.exceptions import AIProviderError, AIUnsafeRequestError
+from ai_client_api.exceptions import (
+    AIError,
+    AIProviderError,
+    AIStructuredOutputError,
+    AIToolError,
+    AIUnsafeRequestError,
+)
 from ai_client_api.types import AIReply, ToolAction
 from fastapi.testclient import TestClient
 from issue_tracker_service.main import app
@@ -61,18 +67,43 @@ class TestAIHealth:
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "unconfigured"
+        assert body["provider"] == "claude"
         assert body["api_key_loaded"] is False
 
     def test_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-xxxx")
         monkeypatch.setenv("CLAUDE_MODEL", "claude-sonnet-4-5")
+        monkeypatch.delenv("AI_PROVIDER", raising=False)
         raw = TestClient(app)
         resp = raw.get("/ai/health")
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "ok"
+        assert body["provider"] == "claude"
         assert body["api_key_loaded"] is True
         assert body["model"] == "claude-sonnet-4-5"
+
+    def test_openai_health_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AI_PROVIDER", "openai")
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        monkeypatch.setenv("OPENAI_MODEL", "gpt-4o-mini")
+        raw = TestClient(app)
+        resp = raw.get("/ai/health")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["provider"] == "openai"
+        assert body["status"] == "ok"
+
+    def test_openai_health_unconfigured(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AI_PROVIDER", "openai")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        raw = TestClient(app)
+        resp = raw.get("/ai/health")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "unconfigured"
+        assert body["provider"] == "openai"
+        assert body["api_key_loaded"] is False
 
 
 @pytest.mark.unit
@@ -124,3 +155,45 @@ class TestAIChat:
                 headers={"X-Session-Token": "tok"},
             )
         assert resp.status_code == 502
+
+    def test_structured_output_error_422(self) -> None:
+        stub = _FixedAI(AIStructuredOutputError("bad envelope"))
+        with _override_ai(stub) as http:
+            resp = http.post(
+                "/ai/chat",
+                json={"prompt": "hi"},
+                headers={"X-Session-Token": "tok"},
+            )
+        assert resp.status_code == 422
+        assert "bad envelope" in resp.json()["detail"]
+
+    def test_channel_id_passed_in_context(self) -> None:
+        stub = _FixedAI(AIReply(reply="ok", actions=[], truncated=False))
+        with _override_ai(stub) as http:
+            resp = http.post(
+                "/ai/chat",
+                json={"prompt": "hi", "channel_id": "C123"},
+                headers={"X-Session-Token": "tok"},
+            )
+        assert resp.status_code == 200
+        assert stub.calls[0][1] == {"channel_id": "C123"}
+
+    def test_tool_error_400(self) -> None:
+        stub = _FixedAI(AIToolError("bad tool args"))
+        with _override_ai(stub) as http:
+            resp = http.post(
+                "/ai/chat",
+                json={"prompt": "hi"},
+                headers={"X-Session-Token": "tok"},
+            )
+        assert resp.status_code == 400
+
+    def test_generic_ai_error_500(self) -> None:
+        stub = _FixedAI(AIError("unexpected"))
+        with _override_ai(stub) as http:
+            resp = http.post(
+                "/ai/chat",
+                json={"prompt": "hi"},
+                headers={"X-Session-Token": "tok"},
+            )
+        assert resp.status_code == 500

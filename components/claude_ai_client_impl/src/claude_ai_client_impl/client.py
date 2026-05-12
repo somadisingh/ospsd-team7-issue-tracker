@@ -32,6 +32,11 @@ from ai_client_api.exceptions import (
     AIToolError,
     AIUnsafeRequestError,
 )
+from ai_client_api.resilience import RetryPolicy, call_with_resilience
+from ai_client_api.structured_output import (
+    parse_structured_envelope,
+    system_prompt_with_structured_mode,
+)
 from ai_client_api.types import AIReply, ToolAction
 from prometheus_client import Counter, Histogram
 
@@ -45,6 +50,15 @@ if TYPE_CHECKING:  # pragma: no cover
     from issue_tracker_client_api import Client as IssueTrackerClient
 
 logger = logging.getLogger(__name__)
+
+
+def _retry_policy() -> RetryPolicy:
+    return RetryPolicy(
+        max_attempts=int(os.getenv("AI_HTTP_MAX_ATTEMPTS", "4")),
+        base_delay_s=float(os.getenv("AI_HTTP_RETRY_BASE_S", "0.1")),
+        max_delay_s=float(os.getenv("AI_HTTP_RETRY_MAX_S", "2.0")),
+    )
+
 
 _anthropic_request_duration_seconds = Histogram(
     "issue_tracker_ai_anthropic_request_duration_seconds",
@@ -136,8 +150,12 @@ class ClaudeAIClient(AIClient):
             )
 
             if stop_reason != "tool_use":
+                text = _extract_text(response.content)
+                if self._config.structured_output and text.strip():
+                    envelope = parse_structured_envelope(text)
+                    text = envelope.reply
                 return AIReply(
-                    reply=_extract_text(response.content),
+                    reply=text,
                     actions=actions,
                     truncated=False,
                 )
@@ -147,6 +165,9 @@ class ClaudeAIClient(AIClient):
 
         # Hop limit reached — surface whatever the model has said so far.
         partial = _extract_text(messages[-1].get("content", [])) if messages else ""
+        if self._config.structured_output and partial.strip():
+            envelope = parse_structured_envelope(partial)
+            partial = envelope.reply
         return AIReply(
             reply=partial or "Reached the tool-hop limit without a final answer.",
             actions=actions,
@@ -168,16 +189,21 @@ class ClaudeAIClient(AIClient):
         tools_schema: list[dict[str, Any]],
     ) -> Any:
         start = time.perf_counter()
-        try:
-            # ``tools`` and ``messages`` are TypedDicts in the Anthropic SDK;
-            # we build them dynamically from dicts/schemas so we cast to Any.
-            response = self._client.messages.create(
+
+        def _invoke() -> Any:
+            return self._client.messages.create(
                 model=self._config.model,
                 max_tokens=self._config.max_tokens,
-                system=SYSTEM_PROMPT,
+                system=system_prompt_with_structured_mode(
+                    SYSTEM_PROMPT,
+                    structured_output=self._config.structured_output,
+                ),
                 tools=tools_schema,  # type: ignore[arg-type]
                 messages=messages,  # type: ignore[arg-type]
             )
+
+        try:
+            response = call_with_resilience(_invoke, retry=_retry_policy())
             result = str(getattr(response, "stop_reason", "unknown") or "unknown")
             _anthropic_request_duration_seconds.labels(
                 model=self._config.model, result=result

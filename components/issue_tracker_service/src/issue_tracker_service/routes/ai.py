@@ -1,9 +1,9 @@
 """AI assistant routes.
 
-``POST /ai/chat``  — user prompt → AI reply (optionally runs tools).
-``GET  /ai/health`` — verifies the AI stack can be constructed.
+``POST /ai/chat``  — user prompt → AI reply (optionally runs tools); requires ``X-Session-Token``.
+``GET  /ai/health`` — verifies the AI stack can be constructed; no session or upstream LLM call.
 
-Both routes authenticate with the existing ``X-Session-Token`` flow and
+The chat route authenticates with the existing ``X-Session-Token`` flow and
 reuse the authenticated ``TrelloClient`` via dependency injection. The
 AI client is built per-request so its tool dispatcher binds to the
 user's own Trello credentials — mirrors how every other endpoint in the
@@ -13,11 +13,14 @@ service handles auth.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
+from ai_client_api.client import AIClient
 from ai_client_api.exceptions import (
     AIError,
     AIProviderError,
+    AIStructuredOutputError,
     AIToolError,
     AIUnsafeRequestError,
 )
@@ -25,7 +28,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from prometheus_client import Counter
 
-from claude_ai_client_impl import ClaudeAIClient, ClaudeConfig
+from claude_ai_client_impl import ClaudeConfig
+from openai_ai_client_impl.config import OpenAIConfig
 
 from issue_tracker_service.ai_deps import get_ai_client
 
@@ -65,10 +69,21 @@ class AIChatResponse(BaseModel):
 
 
 class AIHealthResponse(BaseModel):
-    status: str
-    model: str
-    allow_mutations: bool
-    api_key_loaded: bool
+    """Probe of the configured LLM stack (no upstream LLM call)."""
+
+    status: str = Field(
+        description="`ok` when the provider config loads; `unconfigured` when the API key is missing.",
+    )
+    provider: str = Field(
+        description="Active stack: `claude` or `openai`, from `AI_PROVIDER` (default `claude`).",
+    )
+    model: str = Field(description="Model id for the active provider, or empty if unconfigured.")
+    allow_mutations: bool = Field(
+        description="Whether mutating tools are enabled (`AI_ALLOW_MUTATIONS`).",
+    )
+    api_key_loaded: bool = Field(
+        description="Whether the provider's API key was found in the environment.",
+    )
 
 
 # ---------------------------------------------------------------------- #
@@ -78,22 +93,46 @@ class AIHealthResponse(BaseModel):
 
 @router.get("/health", response_model=AIHealthResponse)
 async def ai_health() -> AIHealthResponse:
-    """Verify the AI stack is configured.
+    """Return which LLM provider is active and whether it is configured.
 
-    Does NOT call Claude — this is a liveness/readiness probe for the
-    configuration layer only.
+    Does **not** call Anthropic or OpenAI. Use this in Swagger **Try it out** to
+    demonstrate multiprovider deployment: redeploy or change server env
+    (`AI_PROVIDER`, `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`, `OPENAI_MODEL`) and
+    compare responses.
     """
+    provider = os.getenv("AI_PROVIDER", "claude").strip().lower()
+    if provider == "openai":
+        try:
+            cfg = OpenAIConfig.from_env()
+        except RuntimeError:
+            return AIHealthResponse(
+                status="unconfigured",
+                provider=provider,
+                model="",
+                allow_mutations=False,
+                api_key_loaded=False,
+            )
+        return AIHealthResponse(
+            status="ok",
+            provider=provider,
+            model=cfg.model,
+            allow_mutations=cfg.allow_mutations,
+            api_key_loaded=bool(cfg.api_key),
+        )
+
     try:
         config = ClaudeConfig.from_env()
     except RuntimeError:
         return AIHealthResponse(
             status="unconfigured",
+            provider="claude",
             model="",
             allow_mutations=False,
             api_key_loaded=False,
         )
     return AIHealthResponse(
         status="ok",
+        provider="claude",
         model=config.model,
         allow_mutations=config.allow_mutations,
         api_key_loaded=bool(config.api_key),
@@ -103,9 +142,14 @@ async def ai_health() -> AIHealthResponse:
 @router.post("/chat", response_model=AIChatResponse)
 async def ai_chat(
     body: AIChatRequest,
-    ai: ClaudeAIClient = Depends(get_ai_client),
+    ai: AIClient = Depends(get_ai_client),
 ) -> AIChatResponse:
-    """Send ``body.prompt`` to Claude. Returns the final answer + action log."""
+    """Send ``body.prompt`` to the **server-configured** LLM (Claude or OpenAI).
+
+    The implementation is chosen via ``AI_PROVIDER`` in the service environment,
+    not via this JSON body. Returns the final answer and a per-request tool
+    action log.
+    """
     context: dict[str, Any] = {}
     if body.board_id is not None:
         context["board_id"] = body.board_id
@@ -117,6 +161,12 @@ async def ai_chat(
     except AIUnsafeRequestError as exc:
         _ai_chat_requests_total.labels(result="unsafe_request").inc()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AIStructuredOutputError as exc:
+        _ai_chat_requests_total.labels(result="structured_output_error").inc()
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
     except AIProviderError as exc:
         logger.warning("AI provider failure: %s", exc)
         _ai_chat_requests_total.labels(result="provider_error").inc()
