@@ -390,15 +390,13 @@ and fakes drive the loops. Set keys in `.env` for manual integration against rea
 
 ## 7. Deploying to production
 
-See [Deployment](deployment.md) for the full Render / CircleCI / Vercel
+See [Deployment](deployment.md) for the full GCP / CircleCI / Vercel
 checklist. TL;DR:
 
-1. Add the env vars from §3 to the **Render** service (not CircleCI — see
-   [CI/CD](ci-cd.md)).
-2. Add the Render service URL to **CORS_ALLOW_ORIGINS** so the Vercel
+1. Add the env vars from §3 to **GCP Secret Manager** (and Cloud Run wiring via Terraform), not CircleCI — see [CI/CD](ci-cd.md).
+2. Add the Cloud Run service URL to **CORS_ALLOW_ORIGINS** so the Vercel
    frontend can reach it, and to the Trello Power-Up "Allowed origins".
-3. Merge → CircleCI builds → the `deploy` job triggers the Render webhook
-   → Render rebuilds with the new env vars → `curl .../ai/health` confirms
+3. Merge → CircleCI **`deploy_gcp`** (when configured) pushes a new image and updates Cloud Run → `curl .../ai/health` confirms
    `status=ok`.
 
 ---

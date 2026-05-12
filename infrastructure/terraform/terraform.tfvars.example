@@ -28,5 +28,28 @@ trello_api_secret  = "(consumer secret)"
 
 trello_callback_url = ""
 
+# --- Plain vs secret (Mode A: manage_secret_versions_in_terraform = false) -----------------
+# Plain OTLP endpoint (safe in tfvars / VCS if this file is not gitignored):
+# otel_exporter_otlp_endpoint = "https://otlp-gateway-prod-us-east-2.grafana.net/otlp"
+#
+# OTLP auth headers (Mode A): NEVER put tokens in tfvars.
+# 1) provision_otlp_headers_secret_shell = true, otlp_headers_secret_version = ""
+# 2) terraform apply  (creates secret shell; Cloud Run does not mount headers yet)
+# 3) printf '%s' 'Authorization=Basic …' | gcloud secrets versions add issue-tracker-otlp-headers --project=PROJECT --data-file=-
+# 4) otlp_headers_secret_version = "1"  (use output of `gcloud secrets versions list`)
+# 5) terraform apply  (mounts OTEL_EXPORTER_OTLP_HEADERS from that version)
+
+# Optional: add non-secret env vars without editing main.tf (merged into Cloud Run).
+# cloud_run_plain_environment_variables = {
+#   CORS_ALLOW_ORIGINS = "https://your-github-pages.github.io"
+#   CHAT_BACKEND       = "slack"
+# }
+# SLACK_BOT_TOKEN via Secret Manager + cloud_run_secret_environment_variables (never plaintext in tfvars).
+
+# Optional: mount existing Secret Manager secrets by id (same project). Runtime SA gets accessor IAM.
+# cloud_run_secret_environment_variables = {
+#   MY_API_TOKEN = "issue-tracker-my-api-token"
+# }
+
 otel_service_name   = "issue-tracker-service"
 ai_allow_mutations  = true

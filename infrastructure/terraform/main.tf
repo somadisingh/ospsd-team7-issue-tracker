@@ -5,7 +5,13 @@ locals {
 
   use_anthropic = local.manage_tf ? (trimspace(var.anthropic_api_key) != "") : var.provision_anthropic_secret_shell
 
+  # Secret Manager resource for OTLP headers
   use_otlp_headers = local.manage_tf ? (trimspace(var.otel_exporter_otlp_headers) != "") : var.provision_otlp_headers_secret_shell
+  mount_otlp_headers_on_cloud_run = (
+    (local.manage_tf && trimspace(var.otel_exporter_otlp_headers) != "")
+    || (!local.manage_tf && var.provision_otlp_headers_secret_shell && trimspace(var.otlp_headers_secret_version) != "")
+  )
+  otlp_headers_sm_version = local.manage_tf ? "latest" : trimspace(var.otlp_headers_secret_version)
 
   version_database = local.manage_tf ? 1 : 0
   version_trello   = local.manage_tf ? 1 : 0
@@ -15,6 +21,7 @@ locals {
   version_otlp = (local.manage_tf && local.use_otlp_headers) ? 1 : 0
 
   plain_env_pairs = merge(
+    var.cloud_run_plain_environment_variables,
     {
       OTEL_SERVICE_NAME  = var.otel_service_name
       OTEL_SDK_DISABLED  = "false"
@@ -32,18 +39,37 @@ locals {
 
   secret_env_bindings = concat(
     [
-      { name = "DATABASE_URL", secret = "${var.secret_name_prefix}-database-url" },
-      { name = "TRELLO_API_KEY", secret = "${var.secret_name_prefix}-trello-api-key" },
-      { name = "TRELLO_API_SECRET", secret = "${var.secret_name_prefix}-trello-api-secret" },
+      {
+        name    = "DATABASE_URL"
+        secret  = "${var.secret_name_prefix}-database-url"
+        version = "latest"
+      },
+      {
+        name    = "TRELLO_API_KEY"
+        secret  = "${var.secret_name_prefix}-trello-api-key"
+        version = "latest"
+      },
+      {
+        name    = "TRELLO_API_SECRET"
+        secret  = "${var.secret_name_prefix}-trello-api-secret"
+        version = "latest"
+      },
     ],
     local.use_anthropic ? [{
-      name   = "ANTHROPIC_API_KEY"
-      secret = "${var.secret_name_prefix}-anthropic-api-key"
+      name    = "ANTHROPIC_API_KEY"
+      secret  = "${var.secret_name_prefix}-anthropic-api-key"
+      version = "latest"
     }] : [],
-    local.use_otlp_headers ? [{
-      name   = "OTEL_EXPORTER_OTLP_HEADERS"
-      secret = "${var.secret_name_prefix}-otlp-headers"
+    local.mount_otlp_headers_on_cloud_run ? [{
+      name    = "OTEL_EXPORTER_OTLP_HEADERS"
+      secret  = "${var.secret_name_prefix}-otlp-headers"
+      version = local.otlp_headers_sm_version
     }] : [],
+    [for name, secret_id in var.cloud_run_secret_environment_variables : {
+      name    = name
+      secret  = secret_id
+      version = "latest"
+    }],
   )
 
   # Static secret ids (same strings as google_secret_manager_secret.*.secret_id) so for_each is
@@ -68,6 +94,7 @@ locals {
     ],
     local._accessor_include_anthropic ? ["${var.secret_name_prefix}-anthropic-api-key"] : [],
     local._accessor_include_otlp ? ["${var.secret_name_prefix}-otlp-headers"] : [],
+    values(var.cloud_run_secret_environment_variables),
   ))
 }
 
@@ -217,6 +244,14 @@ resource "google_secret_manager_secret_iam_member" "run_accessor" {
   secret_id = each.value
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.issue_tracker.email}"
+
+  depends_on = [
+    google_secret_manager_secret.database_url,
+    google_secret_manager_secret.trello_api_key,
+    google_secret_manager_secret.trello_api_secret,
+    google_secret_manager_secret.anthropic,
+    google_secret_manager_secret.otlp_headers,
+  ]
 }
 
 resource "google_cloud_run_v2_service" "issue_tracker" {
@@ -272,13 +307,13 @@ resource "google_cloud_run_v2_service" "issue_tracker" {
       }
 
       dynamic "env" {
-        for_each = { for b in local.secret_env_bindings : b.name => b.secret }
+        for_each = { for b in local.secret_env_bindings : b.name => b }
         content {
           name = env.key
           value_source {
             secret_key_ref {
-              secret  = env.value
-              version = "latest"
+              secret  = env.value.secret
+              version = env.value.version
             }
           }
         }

@@ -57,7 +57,7 @@ for board in client.get_boards():
 ### Talking to the AI assistant
 
 ```bash
-curl -X POST https://ospsd-team7-issue-tracker.onrender.com/ai/chat \
+curl -X POST "https://issue-tracker-service-688420327904.us-central1.run.app/ai/chat" \
   -H "Content-Type: application/json" \
   -H "X-Session-Token: <session-token-from-oauth>" \
   -d '{"prompt":"Summarize the open issues on my main board."}'
@@ -93,13 +93,13 @@ ospsd-team-07/
 | [Architecture](architecture.md) | Component design, dependency injection, and data flow |
 | [AI Integration](ai-integration.md) | **HW3** — Claude tool-calling, safety, `/ai/*` endpoints, examples |
 | [Cross-Vertical Chat (Slack)](cross-vertical-slack.md) | **HW3** — Shared chat API, Slack adapter, `CHAT_BACKEND` |
-| [Deployment](deployment.md) | **HW3** — Render / Vercel / Trello env setup and verification |
+| [Deployment](deployment.md) | **HW3** — GCP Cloud Run / Vercel / Trello env setup and verification |
 | [Issue Tracker Client API](api/issue_tracker_client_api.md) | Abstract interface reference |
 | [Trello Client Implementation](api/trello_client_impl.md) | Trello implementation reference |
 | [FastAPI Service](api/issue_tracker_service.md) | REST API endpoints, `/ai/*` routes, and auth flow |
 | [Service Client Adapter](api/issue_tracker_adapter.md) | Adapter component reference |
 | [Chat Client API](api/chat_client_api.md) | Shared chat contract and local implementation |
 | [Code Quality](code-quality.md) | Ruff, mypy, and linting guidelines |
-| [CI/CD](ci-cd.md) | CircleCI pipeline, environment variables, Render deploy hook |
+| [CI/CD](ci-cd.md) | CircleCI pipeline, environment variables, GCP deploy |
 | [Testing guide](testing/TESTING.md) | Pytest layout, markers, coverage, optional e2e probes |
 | [Test files reference](testing/TEST_FILES_REFERENCE.md) | Inventory of major test modules and what they cover |

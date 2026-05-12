@@ -104,4 +104,4 @@ Environment variables required for deployment:
 | `AI_MAX_TOKENS` | **HW3** — max tokens per Claude reply (default: `1024`) |
 | `AI_ALLOW_MUTATIONS` | **HW3** — exposes mutating tools (`create_board`, `create_issue`, …) to Claude when `true` (default: `false`) |
 
-See [Deployment](../deployment.md) for where each of these lives (Render dashboard vs. CircleCI).
+See [Deployment](../deployment.md) for where each of these lives (GCP Secret Manager / Cloud Run vs. CircleCI).

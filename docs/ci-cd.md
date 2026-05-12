@@ -4,17 +4,16 @@ This project uses [CircleCI](https://circleci.com/) for continuous integration. 
 
 ## Pipeline Overview
 
-On every push and pull request, three jobs run in parallel, followed by a deploy job:
+On every push and pull request, **`lint`**, **`test`**, and **`health_check`** run in parallel, along with **`validate_infra`** (Terraform fmt/validate with `-backend=false`).
 
 | Job   | Purpose |
 |-------|---------|
 | **lint** | Static analysis and code quality checks (ruff, mypy) |
 | **test** | Run the full test suite with coverage |
 | **health_check** | Boots the FastAPI app and hits `/health` to verify startup |
-| **deploy** | On success, POSTs to the Render deploy hook so Render rebuilds the service |
+| **validate_infra** | Terraform `fmt -check` and `validate` under `infrastructure/terraform` |
 
-All four of `lint` / `test` / `health_check` / `deploy` must pass for the pipeline to be green.
-The `deploy` job is a no-op if `RENDER_DEPLOY_HOOK_URL` is not configured in CircleCI project settings (useful for forks).
+**`deploy_gcp`** runs only after **`lint`**, **`test`**, **`health_check`**, and **`validate_infra`** succeed, and only on branches **`main`** and **`hw3`**. It is enabled when GCP-related project variables are set — see **`infrastructure/terraform/README.md`** (*CircleCI — app deploy only*).
 
 ---
 
@@ -64,54 +63,25 @@ uv run pytest -m "unit or integration or e2e" \
 
 ### Environment Variables
 
-CircleCI only needs values the pipeline actually consumes. Everything runtime-only
-(Anthropic key, CORS origins, OAuth callback URL) lives on Render — see
-[Deployment](deployment.md) for the full matrix.
+CircleCI only needs values the pipeline actually consumes. Production runtime secrets (Anthropic, CORS, OAuth callback URL, database URL) are configured for **Cloud Run** via **GCP Secret Manager** and Terraform — see [Deployment](deployment.md).
 
-**Required in CircleCI project settings** (for the `test` and `deploy` jobs):
+**Required in CircleCI project settings** (for the `test` job when running e2e):
 
 | Variable | Where it's used | Notes |
 |---|---|---|
 | `TRELLO_API_KEY` | `test` (e2e) | Your Trello API key. |
 | `TRELLO_TOKEN` | `test` (e2e) | Trello OAuth token for the e2e fixture account. |
 | `TRELLO_BOARD_ID` | `test` (e2e, optional) | Board ID to target in e2e tests. |
-| `RENDER_DEPLOY_HOOK_URL` | `deploy` | Paste from Render → *Settings → Deploy Hook URL*. If empty, the deploy step is skipped. |
 
 If the Trello vars are not set, e2e tests auto-skip.
 
-**NOT needed in CircleCI**: `ANTHROPIC_API_KEY`, `AI_*`, `CORS_ALLOW_ORIGINS`,
-`TRELLO_CALLBACK_URL`. The AI test suite uses a stub Anthropic client, and the
-runtime values are consumed only by the Render-hosted process.
+**NOT needed in CircleCI** for normal CI: `ANTHROPIC_API_KEY`, `AI_*`, `CORS_ALLOW_ORIGINS`, `TRELLO_CALLBACK_URL`. The AI test suite uses a stub Anthropic client; runtime values are consumed by the deployed Cloud Run service.
 
 ---
 
-## Deploy Job
+## GCP deploy on `main` / `hw3`
 
-The `deploy` job is a thin wrapper around the Render deploy hook:
-
-```yaml
-- run:
-    name: Trigger Render deploy
-    command: |
-      if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-        echo "RENDER_DEPLOY_HOOK_URL not set; skipping deploy"; exit 0
-      fi
-      curl -X POST -f -s -o /dev/null -w "%{http_code}" "$RENDER_DEPLOY_HOOK_URL" \
-        | grep -qE '^2[0-9]{2}$'
-```
-
-Render then pulls the latest commit on the configured branch, runs
-`uv sync --all-extras`, and restarts the process with the environment variables
-set in the Render dashboard. There is currently **no branch filter** on this
-job — every green build on every branch redeploys. See
-[Deployment → Optional hardening](deployment.md#52-gate-production-deploys-to-main)
-for how to gate it to `main`.
-
----
-
-## GCP deploy on `main`
-
-When **lint**, **test**, **health_check**, and **validate_infra** succeed on branch **`main`**, CircleCI runs **`deploy_gcp`**. Enable it with **`GCP_CI_DEPLOY=1`**, **`GCP_SA_KEY_JSON_B64`**, and **`GCP_PROJECT_ID`**. Full numbered setup (service account, state bucket, **`terraform init -migrate-state`**, CircleCI variables) is documented in **`infrastructure/terraform/README.md`** under **Automate deploys on `main`**. Set **`GCP_TERRAFORM_STATE_BUCKET`** after migrating state to enable **`terraform apply`** on each deploy.
+When **lint**, **test**, **health_check**, and **validate_infra** succeed on **`main`** or **`hw3`**, CircleCI runs **`deploy_gcp`**. Enable it with **`GCP_CI_DEPLOY=1`**, **`GCP_SA_KEY_JSON_B64`**, and **`GCP_PROJECT_ID`**. That job **builds and pushes** the container image and **updates Cloud Run** to the new tag. **Terraform is not executed in CircleCI**; run **`terraform apply`** from your laptop when infrastructure changes. Setup: **`infrastructure/terraform/README.md`** (CircleCI app deploy).
 
 ---
 

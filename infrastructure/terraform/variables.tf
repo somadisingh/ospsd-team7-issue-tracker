@@ -98,6 +98,26 @@ variable "trello_callback_url" {
   default     = ""
 }
 
+variable "cloud_run_plain_environment_variables" {
+  description = <<-EOT
+    Extra plaintext environment variables for the Cloud Run container (e.g. CORS_ALLOW_ORIGINS).
+    Built-in keys (OTEL_*, AI_ALLOW_MUTATIONS, SKIP_ALEMBIC, TRELLO_CALLBACK_URL when set, etc.) win
+    over duplicate keys in this map.
+  EOT
+  type        = map(string)
+  default     = {}
+}
+
+variable "cloud_run_secret_environment_variables" {
+  description = <<-EOT
+    Map of env var name -> Secret Manager secret id (short id, e.g. issue-tracker-my-api-key).
+    Secrets must already exist in the same GCP project. Terraform grants the Cloud Run runtime
+    service account secretAccessor on each distinct secret id listed here (and on the core secrets).
+  EOT
+  type        = map(string)
+  default     = {}
+}
+
 variable "anthropic_api_key" {
   description = "When manage_secret_versions_in_terraform is true and non-empty, creates secret + ANTHROPIC_API_KEY binding."
   type        = string
@@ -115,6 +135,14 @@ variable "provision_otlp_headers_secret_shell" {
   description = "When manage_secret_versions_in_terraform is false, set true to allocate OTLP headers secret shell (payload via GCP only)."
   type        = bool
   default     = false
+}
+
+variable "otlp_headers_secret_version" {
+  description = <<-EOT
+    Secret Manager version id mounted as OTEL_EXPORTER_OTLP_HEADERS.
+  EOT
+  type        = string
+  default     = ""
 }
 
 variable "otel_exporter_otlp_endpoint" {

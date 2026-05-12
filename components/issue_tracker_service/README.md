@@ -79,7 +79,7 @@ The service always exposes Prometheus metrics at **`GET /metrics`** (disable wit
 
 Prebuilt Grafana dashboard JSON is available at `infrastructure/monitoring/grafana/dashboards/issue-tracker-kpis.json`, with provisioning config in `infrastructure/monitoring/grafana/provisioning/`.
 
-**Migrations:** On **Cloud Run**, **`docker-entrypoint.sh`** runs **`alembic upgrade head`** before **uvicorn** (override with **`SKIP_ALEMBIC=true`** only for debugging). On **Render**, use `preDeployCommand` when available, or run once via **Render Shell**. Locally, from repo root: `uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head`.
+**Migrations:** On **Cloud Run**, **`docker-entrypoint.sh`** runs **`alembic upgrade head`** before **uvicorn** (override with **`SKIP_ALEMBIC=true`** only for debugging). Locally, from repo root: `uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head`.
 
 ## API Reference
 
@@ -136,7 +136,7 @@ Production hosting is modeled with **GCP Cloud Run + Terraform** at [`infrastruc
 | **Platform (GCP)** | [Google Cloud Run](https://cloud.google.com/run) + Terraform in-repo        |
 | **Example URLs**   | Cloud Run: `terraform output -raw service_url` |
 
-On **`main`**, CircleCI **`deploy_gcp`** can **`gcloud builds submit`** and optionally **`terraform apply`** once you configure GCP env vars (**`infrastructure/terraform/README.md`** → *Automate deploys on `main`*).
+On **`main`** / **`hw3`**, CircleCI **`deploy_gcp`** runs **`gcloud builds submit`** and **`gcloud run services update`** once you configure GCP env vars (**`infrastructure/terraform/README.md`** → *CircleCI — app deploy only*). **Terraform `apply` is laptop-only.**
 
 Environment secrets for Cloud Run land in **Secret Manager** via Terraform (`database_url`, Trello credentials, optional OTLP/Anthropic). Use `terraform output trello_callback_hint` to align **`TRELLO_CALLBACK_URL`** with the Cloud Run hostname after the first revision.
 
