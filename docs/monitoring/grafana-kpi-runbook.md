@@ -20,6 +20,10 @@ Prometheus metrics emitted by `telemetry.py`:
 - `issue_tracker_http_request_duration_seconds` (histogram)
 - `issue_tracker_http_requests_total` (counter)
 - `issue_tracker_http_request_outcomes_total` (counter)
+- `issue_tracker_ai_anthropic_input_tokens_total` (counter)
+- `issue_tracker_ai_anthropic_output_tokens_total` (counter)
+- `issue_tracker_ai_anthropic_cost_usd_total` (counter)
+- `issue_tracker_ai_anthropic_request_cost_usd` (histogram)
 
 Labels:
 
@@ -46,6 +50,7 @@ What is auto-provisioned by Docker setup:
 - Prometheus datasource (`uid: prometheus`)
 - Dashboard provider for JSON dashboards
 - Prebuilt dashboard JSON at `infrastructure/monitoring/grafana/dashboards/issue-tracker-kpis.json`
+- Prometheus alert rules from `infrastructure/monitoring/alerts.yml`
 
 Default scrape targets in `prometheus.yml`:
 
@@ -88,6 +93,58 @@ sum(rate(issue_tracker_http_request_outcomes_total[5m]))
 ```promql
 sum(rate(issue_tracker_http_request_outcomes_total{outcome="failure"}[5m])) by (failure_kind)
 ```
+
+### 5) AI Token Throughput
+
+```promql
+sum(rate(issue_tracker_ai_anthropic_input_tokens_total[5m])) by (model)
+```
+
+```promql
+sum(rate(issue_tracker_ai_anthropic_output_tokens_total[5m])) by (model)
+```
+
+### 6) AI Estimated Cost
+
+```promql
+sum(rate(issue_tracker_ai_anthropic_cost_usd_total[5m])) by (model)
+```
+
+```promql
+sum(rate(issue_tracker_ai_anthropic_cost_usd_total[5m]))
+/
+clamp_min(sum(rate(issue_tracker_ai_chat_requests_total{result="success"}[5m])), 1e-9)
+```
+
+## Alerting (SLO-based)
+
+Configure these in Grafana alert rules (or equivalent Prometheus alerts):
+
+1. **Error budget burn signal**
+   - Query:
+   ```promql
+   sum(rate(http_server_responses_total{http_response_status_code=~"5.."}[5m]))
+   /
+   clamp_min(sum(rate(http_server_responses_total[5m])), 1e-9)
+   ```
+   - Threshold: `> 0.02` for 10 minutes
+
+2. **Latency SLO breach**
+   - Query:
+   ```promql
+   histogram_quantile(
+     0.95,
+     sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le)
+   )
+   ```
+   - Threshold: `> 1.5` seconds for 10 minutes
+
+3. **AI cost anomaly (optional)**
+   - Query:
+   ```promql
+   sum(rate(issue_tracker_ai_anthropic_cost_usd_total[15m]))
+   ```
+   - Threshold: tune by expected load; start with dashboard-only observation.
 
 ## Verification Procedure
 

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -54,6 +55,27 @@ _ai_tool_invocations_total = Counter(
     "issue_tracker_ai_tool_invocations_total",
     "Total AI tool invocations by tool name and outcome.",
     labelnames=("tool", "outcome"),
+)
+_ai_anthropic_input_tokens_total = Counter(
+    "issue_tracker_ai_anthropic_input_tokens_total",
+    "Total Anthropic input tokens consumed.",
+    labelnames=("model",),
+)
+_ai_anthropic_output_tokens_total = Counter(
+    "issue_tracker_ai_anthropic_output_tokens_total",
+    "Total Anthropic output tokens generated.",
+    labelnames=("model",),
+)
+_ai_anthropic_cost_usd_total = Counter(
+    "issue_tracker_ai_anthropic_cost_usd_total",
+    "Estimated Anthropic request cost in USD (cumulative).",
+    labelnames=("model",),
+)
+_ai_anthropic_request_cost_usd = Histogram(
+    "issue_tracker_ai_anthropic_request_cost_usd",
+    "Estimated Anthropic request cost in USD per call.",
+    labelnames=("model",),
+    buckets=(0.0001, 0.0005, 0.001, 0.005, 0.01, 0.02, 0.05, 0.1, float("inf")),
 )
 
 
@@ -160,7 +182,20 @@ class ClaudeAIClient(AIClient):
             _anthropic_request_duration_seconds.labels(
                 model=self._config.model, result=result
             ).observe(time.perf_counter() - start)
-            return response
+            input_tokens, output_tokens = _extract_usage_tokens(response)
+            _ai_anthropic_input_tokens_total.labels(model=self._config.model).inc(
+                input_tokens
+            )
+            _ai_anthropic_output_tokens_total.labels(model=self._config.model).inc(
+                output_tokens
+            )
+            estimated_cost = _estimate_cost_usd(input_tokens, output_tokens)
+            _ai_anthropic_cost_usd_total.labels(model=self._config.model).inc(
+                estimated_cost
+            )
+            _ai_anthropic_request_cost_usd.labels(model=self._config.model).observe(
+                estimated_cost
+            )
         except Exception as exc:
             _anthropic_request_duration_seconds.labels(
                 model=self._config.model, result="error"
@@ -290,3 +325,26 @@ def _json_safe(value: Any) -> Any:
     except TypeError:
         return str(value)
     return value
+
+
+def _extract_usage_tokens(response: Any) -> tuple[int, int]:
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return (0, 0)
+
+    input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
+    output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
+    return (input_tokens, output_tokens)
+
+
+def _estimate_cost_usd(input_tokens: int, output_tokens: int) -> float:
+    input_per_million = float(
+        os.environ.get("AI_COST_INPUT_PER_MILLION_USD", "3.0").strip() or "3.0"
+    )
+    output_per_million = float(
+        os.environ.get("AI_COST_OUTPUT_PER_MILLION_USD", "15.0").strip() or "15.0"
+    )
+
+    input_cost = (input_tokens / 1_000_000.0) * input_per_million
+    output_cost = (output_tokens / 1_000_000.0) * output_per_million
+    return input_cost + output_cost
