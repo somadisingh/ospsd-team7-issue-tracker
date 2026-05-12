@@ -12,8 +12,10 @@ the seeded in-memory :class:`LocalChatClient`. Adding a new backend (e.g.
 Discord, Telegram) is one entry in ``_CHAT_BACKEND_PACKAGES`` plus the
 relevant impl pinned in ``pyproject.toml`` — no other code change.
 
-``AI_PROVIDER`` selects the LLM stack: ``claude`` (default) or ``openai``.
-Both implement :class:`ai_client_api.AIClient`.
+``AI_PROVIDER`` selects the **default** LLM stack: ``claude`` (default) or ``openai``.
+Each ``POST /ai/chat`` call may override that default with optional header
+``X-AI-Provider: claude`` or ``X-AI-Provider: openai`` (case-insensitive).
+Both stacks implement :class:`ai_client_api.AIClient`.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ import importlib
 import logging
 import os
 from functools import lru_cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from ai_client_api.client import AIClient
 from chat_client_api import (
@@ -88,6 +90,22 @@ def _ai_provider() -> str:
     return os.getenv("AI_PROVIDER", "claude").strip().lower()
 
 
+def _resolve_llm_provider(x_ai_provider: str | None) -> str:
+    """Return ``claude`` or ``openai`` for this request.
+
+    Header ``X-AI-Provider`` overrides ``AI_PROVIDER`` when set and valid.
+    """
+    raw = (x_ai_provider or "").strip().lower()
+    if not raw:
+        return _ai_provider()
+    if raw not in ("claude", "openai"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid X-AI-Provider. Expected 'claude' or 'openai'.",
+        )
+    return raw
+
+
 def _authenticated_issue_tracker(
     x_session_token: str = Header(..., alias="X-Session-Token"),
     db: Session = Depends(get_db),
@@ -119,14 +137,22 @@ def _authenticated_issue_tracker(
 
 def get_ai_client(
     issue_tracker: TrelloClient = Depends(_authenticated_issue_tracker),
+    x_ai_provider: Annotated[
+        str | None,
+        Header(
+            alias="X-AI-Provider",
+            description="Override `AI_PROVIDER` for this request: `claude` or `openai` (case-insensitive).",
+        ),
+    ] = None,
 ) -> AIClient:
     """Build a request-scoped :class:`AIClient` (Claude or OpenAI).
 
     The issue-tracker client is user-scoped (holds OAuth creds); the
-    chat client and provider config are process-wide.
+    chat client and provider config are process-wide. Per-request
+    ``X-AI-Provider`` overrides the default from ``AI_PROVIDER`` when set.
     """
     chat = _chat_client()
-    provider = _ai_provider()
+    provider = _resolve_llm_provider(x_ai_provider)
     if provider == "openai":
         from openai_ai_client_impl import OpenAIAIClient
 

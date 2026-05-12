@@ -13,6 +13,7 @@ import pytest
 from chat_client_api import ChatClient, register_client
 from chat_client_impl import LocalChatClient
 from chat_client_impl.slack import SlackChatAdapter
+from fastapi import HTTPException
 from issue_tracker_service.ai_deps import (
     _chat_client,
     _claude_config,
@@ -103,6 +104,35 @@ class TestAIProviderClient:
 
         client = get_ai_client(issue_tracker=MagicMock())
         assert isinstance(client, OpenAIAIClient)
+
+    def test_header_openai_overrides_env_claude(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("AI_PROVIDER", "claude")
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        from openai_ai_client_impl import OpenAIAIClient
+
+        client = get_ai_client(issue_tracker=MagicMock(), x_ai_provider="openai")
+        assert isinstance(client, OpenAIAIClient)
+
+    def test_header_claude_overrides_env_openai(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("AI_PROVIDER", "openai")
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+        from claude_ai_client_impl import ClaudeAIClient
+
+        client = get_ai_client(issue_tracker=MagicMock(), x_ai_provider="claude")
+        assert isinstance(client, ClaudeAIClient)
+
+    def test_invalid_x_ai_provider_raises_400(self) -> None:
+        with pytest.raises(HTTPException) as exc:
+            get_ai_client(issue_tracker=MagicMock(), x_ai_provider="gemini")
+        assert exc.value.status_code == 400
 
     def test_unknown_ai_provider_raises(
         self,
