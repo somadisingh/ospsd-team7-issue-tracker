@@ -9,6 +9,8 @@ This repository provides a professional-grade, component-based Python system for
 
 The project emphasizes strict separation of concerns, dependency injection, and a comprehensive toolchain to enforce code quality and best practices.
 
+**API changes:** See [`CHANGELOG.md`](CHANGELOG.md) for breaking changes when upgrading from older HW1/HW2 clients (shared vertical alignment: e.g. `Board.name` → `board_name` on the HTTP contract).
+
 ## Team Members
 
 - **Somaditya Singh** (`ss20288`)
@@ -28,7 +30,7 @@ This project is built on the principle of "programming integrated over time." Th
 
 ## Core Components
 
-The project is a `uv` workspace containing five packages:
+The project is a `uv` workspace; primary packages include:
 
 1. **`issue_tracker_client_api`**: Defines the abstract `Client` base class (ABC). This is the contract for what actions an issue tracker client can perform (e.g., `get_issues_in_list`, `get_board`, `get_boards`, `get_members_on_issue`).
 2. **`trello_client_impl`**: Provides the `TrelloClient` class, a concrete implementation that uses the Trello API directly.
@@ -36,6 +38,9 @@ The project is a `uv` workspace containing five packages:
 4. **`issue_tracker_service_api_client`**: An auto-generated Python HTTP client created from the FastAPI service's OpenAPI specification using `openapi-python-client`.
 5. **`issue_tracker_adapter`**: A service client adapter that implements the `Client` ABC by delegating to the auto-generated HTTP client, achieving location transparency.
 6. **`chat_client_impl`**: A local in-memory chat client implementation that uses the shared `chat-client-api` contract from GitHub.
+7. **`ai_client_api`**, **`claude_ai_client_impl`**, **`openai_ai_client_impl`** *(HW3)*: Provider-agnostic `AIClient` ABC and two concrete LLM stacks with typed tool calling to Trello and chat.
+
+**Issue tracker vs AI wiring:** The adapter registers **`issue_tracker_client_api.get_client`** for library use. The **`/ai/*`** routes instead use FastAPI **`Depends(get_ai_client)`** to build a **request-scoped** `ClaudeAIClient` or `OpenAIAIClient` (see **`docs/ai-integration.md`**). The optional **`ai_client_api.register_client` / `get_client()`** pair is for non-FastAPI callers (scripts, tests).
 
 ## Project Structure
 
@@ -47,6 +52,9 @@ ospsd-team-07/
 │   ├── issue_tracker_service/               # FastAPI service (OAuth + REST)
 │   ├── issue_tracker_service_api_client/    # Auto-generated HTTP client
 │   ├── issue_tracker_adapter/               # Service client adapter
+│   ├── ai_client_api/                       # HW3: AIClient ABC + types
+│   ├── claude_ai_client_impl/               # HW3: Anthropic implementation
+│   ├── openai_ai_client_impl/               # HW3: OpenAI implementation
 │   └── chat_client_impl/                    # Local chat client implementation
 ├── tests/                                   # Integration and E2E tests
 │   ├── integration/                         # Component integration tests

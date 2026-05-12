@@ -29,6 +29,8 @@ def test_parse_structured_envelope_accepts_preamble() -> None:
     text = 'Sure — here you go:\n{"reply": "Listed 2 boards.", "rationale": null}\n'
     env = parse_structured_envelope(text)
     assert env.reply == "Listed 2 boards."
+
+
 def test_parse_structured_envelope_invalid() -> None:
     with pytest.raises(AIStructuredOutputError):
         parse_structured_envelope("not json")

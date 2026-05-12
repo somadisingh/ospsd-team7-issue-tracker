@@ -10,7 +10,7 @@ from __future__ import annotations
 import itertools
 from datetime import UTC, datetime
 
-from chat_client_api import (  # type: ignore[import-untyped]
+from chat_client_api import (
     Channel,
     ChannelNotFoundError,
     ChatClient,

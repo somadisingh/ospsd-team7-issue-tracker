@@ -35,9 +35,8 @@ test suite.
               └─────────────┘
 ```
 
-Source: `.circleci/config.yml`. There is currently no branch filter — the
-`deploy` job runs on every green build. See [Optional hardening](#62-optional-hardening)
-for branch-filtering.
+Source: `.circleci/config.yml`. Branch filters depend on your CircleCI workflow
+(see **§5.2** in this doc for gating deploys to `main`).
 
 ---
 
@@ -185,8 +184,8 @@ Current state and next steps:
 | Requirement       | Status                               | Plan                                                  |
 | ----------------- | ------------------------------------ | ----------------------------------------------------- |
 | IaC               | Terraform-managed Cloud Run + Secret Manager in `infrastructure/terraform/`. | Keep Terraform as the single source of truth; avoid parallel manual platform configs. |
-| Request latency   | Not yet emitted.                     | Add a FastAPI middleware that times each request and exports Prometheus metrics at `/metrics`; scrape with Grafana Cloud or Render's built-in metrics. |
-| Success / failure | Not yet emitted.                     | Counter metric keyed by `{route, status_code}`; derive rates in Grafana. |
-| Dashboards        | —                                    | Grafana Cloud free tier + scrape `/metrics`. |
+| Request latency   | Prometheus histogram + OTel in `issue_tracker_service/telemetry.py`. | Scrape `/metrics` or export OTLP; visualize in Grafana (see `infrastructure/monitoring/`). |
+| Success / failure | Counters with route / method / status and domain vs infra `failure_kind`. | Same dashboards as above. |
+| Dashboards        | JSON dashboard under `infrastructure/monitoring/grafana/dashboards/`. | Import into Grafana Cloud or local docker-compose stack. |
 
-These are owned by **T3 (Somaditya + Joshua)** per the HW3 work plan.
+CircleCI also runs **`validate_infra`** (Terraform fmt/validate) and can run **`deploy_gcp`** on `main` / `hw3` when GCP credentials are configured (see `infrastructure/terraform/README.md`).

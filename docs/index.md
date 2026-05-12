@@ -12,10 +12,13 @@ This project provides:
 - **`issue_tracker_service_api_client`** — Auto-generated Python client from the service's OpenAPI spec (via `openapi-python-client`)
 - **`issue_tracker_adapter`** — Service client adapter that implements the `Client` ABC by delegating to the auto-generated HTTP client
 - **`ai_client_api`** *(HW3)* — Provider-agnostic ABC for an AI assistant, plus prompt sanitization helpers
-- **`claude_ai_client_impl`** *(HW3)* — Concrete Anthropic Claude implementation with a tool-calling loop and safety-gated tool catalogue
+- **`claude_ai_client_impl`** *(HW3)* — Anthropic Claude implementation with a tool-calling loop and safety-gated tool catalogue
+- **`openai_ai_client_impl`** *(HW3)* — OpenAI Chat Completions implementation mirroring the same tool surface
 - **`chat_client_impl`** — Local in-memory chat client implementation that uses the shared `chat-client-api` contract from GitHub
 
-The design supports dependency injection: implementations register at import time, and consumers use a single factory (`get_client`) to obtain the configured client — whether it talks to Trello directly or through the deployed service. The AI integration follows the exact same pattern (see [AI Integration](ai-integration.md)).
+The issue tracker uses **registration**: implementations register at import time, and consumers call **`issue_tracker_client_api.get_client()`** for the configured `Client` (direct Trello or remote service after `issue_tracker_adapter.register()`).
+
+For **AI**, the FastAPI app uses **`Depends(get_ai_client)`** to inject a **request-scoped** `ClaudeAIClient` or `OpenAIAIClient` (see [AI Integration](ai-integration.md)). The optional **`ai_client_api.register_client` / `get_client()`** factory is for library-style or test harness use outside the HTTP layer.
 
 ## Quick Start
 
@@ -32,7 +35,7 @@ from issue_tracker_client_api import get_client, Client
 
 client: Client = get_client(interactive=False)
 for board in client.get_boards():
-    print(board.name)
+    print(board.board_name)
 ```
 
 ### Via deployed service (adapter)
@@ -48,7 +51,7 @@ client = get_client(
     session_token="<session-token-from-oauth>",
 )
 for board in client.get_boards():
-    print(board.name)
+    print(board.board_name)
 ```
 
 ### Talking to the AI assistant
@@ -73,7 +76,8 @@ ospsd-team-07/
 │   ├── issue_tracker_service_api_client/  # Auto-generated HTTP client (openapi-python-client)
 │   ├── issue_tracker_adapter/             # Service client adapter (Client ABC → HTTP client)
 │   ├── ai_client_api/                     # HW3: AIClient ABC + sanitizer + types
-│   ├── claude_ai_client_impl/             # HW3: Anthropic Claude implementation + tool catalogue
+│   ├── claude_ai_client_impl/             # HW3: Anthropic Claude + tools
+│   ├── openai_ai_client_impl/             # HW3: OpenAI + tools
 │   └── chat_client_impl/                  # Local chat client implementation
 ├── tests/
 │   ├── integration/                       # DI and interface compliance
@@ -88,6 +92,7 @@ ospsd-team-07/
 |---------|-------------|
 | [Architecture](architecture.md) | Component design, dependency injection, and data flow |
 | [AI Integration](ai-integration.md) | **HW3** — Claude tool-calling, safety, `/ai/*` endpoints, examples |
+| [Cross-Vertical Chat (Slack)](cross-vertical-slack.md) | **HW3** — Shared chat API, Slack adapter, `CHAT_BACKEND` |
 | [Deployment](deployment.md) | **HW3** — Render / Vercel / Trello env setup and verification |
 | [Issue Tracker Client API](api/issue_tracker_client_api.md) | Abstract interface reference |
 | [Trello Client Implementation](api/trello_client_impl.md) | Trello implementation reference |
@@ -96,3 +101,5 @@ ospsd-team-07/
 | [Chat Client API](api/chat_client_api.md) | Shared chat contract and local implementation |
 | [Code Quality](code-quality.md) | Ruff, mypy, and linting guidelines |
 | [CI/CD](ci-cd.md) | CircleCI pipeline, environment variables, Render deploy hook |
+| [Testing guide](testing/TESTING.md) | Pytest layout, markers, coverage, optional e2e probes |
+| [Test files reference](testing/TEST_FILES_REFERENCE.md) | Inventory of major test modules and what they cover |

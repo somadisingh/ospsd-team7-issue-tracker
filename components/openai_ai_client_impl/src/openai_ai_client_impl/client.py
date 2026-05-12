@@ -35,7 +35,7 @@ from openai_ai_client_impl.config import OpenAIConfig
 from openai_ai_client_impl.domain_catalog import build_domain_catalog
 
 if TYPE_CHECKING:
-    from chat_client_api import ChatClient  # type: ignore[import-untyped]
+    from chat_client_api import ChatClient
     from issue_tracker_client_api import Client as IssueTrackerClient
 
 logger = logging.getLogger(__name__)

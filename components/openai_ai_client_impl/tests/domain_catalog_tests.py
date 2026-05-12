@@ -47,6 +47,7 @@ def test_dispatch_hits_issue_tracker_and_chat_tools() -> None:
     it.update_board.return_value = board
     it.create_issue.return_value = issue
     it.update_issue.return_value = issue
+    it.assign_issue.return_value = True
 
     ch = Channel(
         channel_id="c1",
@@ -81,6 +82,10 @@ def test_dispatch_hits_issue_tracker_and_chat_tools() -> None:
         {"board_id": "b1", "title": "x", "desc": None},
     )
     assert cat.dispatch("update_issue_status", {"issue_id": "i1", "status": "to_do"})
+    assert cat.dispatch("assign_issue", {"issue_id": "i1", "member_id": "m1"}) == {
+        "success": True,
+    }
+    it.assign_issue.assert_called_once_with(issue_id="i1", member_id="m1")
     assert cat.dispatch("list_channels", {})
     assert cat.dispatch("get_channel", {"channel_id": "c1"})
     assert cat.dispatch("get_recent_messages", {"channel_id": "c1", "limit": 5})

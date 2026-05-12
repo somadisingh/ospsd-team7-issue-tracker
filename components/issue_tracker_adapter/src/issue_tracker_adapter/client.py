@@ -433,4 +433,4 @@ def get_client_impl(**kwargs: Any) -> Client:  # noqa: ANN401
 
 def register() -> None:
     """Register the service adapter with the issue tracker client API."""
-    issue_tracker_client_api.get_client = get_client_impl  # type: ignore[assignment]
+    issue_tracker_client_api.get_client = get_client_impl

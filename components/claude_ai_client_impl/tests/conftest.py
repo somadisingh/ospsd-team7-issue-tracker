@@ -33,6 +33,7 @@ def mock_issue_tracker() -> MagicMock:
     it.get_issue.return_value = issue
     it.create_issue.return_value = issue
     it.update_issue.return_value = issue
+    it.assign_issue.return_value = True
     return it
 
 

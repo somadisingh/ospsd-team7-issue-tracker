@@ -197,7 +197,7 @@ strict = true
 explicit_package_bases = true  # Required for src layout
 mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src", "components/issue_tracker_service/src", "components/issue_tracker_adapter/src", "components/issue_tracker_service_api_client", "components/ai_client_api/src", "components/claude_ai_client_impl/src", "components/openai_ai_client_impl/src", "components/chat_client_impl/src"]
 ignore_missing_imports = false
-warn_unused_ignores = false
+warn_unused_ignores = true
 show_error_codes = true
 
 [[tool.mypy.overrides]]

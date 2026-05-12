@@ -3,8 +3,8 @@
 This project integrates **external LLMs** into the Trello-backed issue tracker:
 **Anthropic Claude** (default) or **OpenAI** (Chat Completions with function tools),
 selectable at runtime via `AI_PROVIDER`. Both stacks implement the same
-[`AIClient`](../../components/ai_client_api/src/ai_client_api/client.py) contract
-from `ai_client_api`. FastAPI routes **`GET /ai/health`** and **`POST /ai/chat`**
+**`AIClient`** contract from package **`ai_client_api`** (see
+`components/ai_client_api/src/ai_client_api/client.py` in the repo). FastAPI routes **`GET /ai/health`** and **`POST /ai/chat`**
 authenticate with the existing session flow and bind tools to the caller's
 Trello OAuth credentials.
 
@@ -115,6 +115,7 @@ in the prompt.
 | `rename_board`             | yes      | Rename an existing board.                         |
 | `create_issue`             | yes      | Open a new issue on a board.                      |
 | `update_issue_status`      | yes      | Move an issue between `to_do`/`in_progress`/`completed`. |
+| `assign_issue`             | yes      | Assign a board member to an issue (`issue_id`, `member_id`). |
 | `send_chat_message`        | yes      | Post a message to a chat channel.                 |
 
 When `AI_ALLOW_MUTATIONS=false` the mutating tools are **absent from the schema

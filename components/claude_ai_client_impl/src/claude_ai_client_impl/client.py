@@ -46,7 +46,7 @@ from claude_ai_client_impl.tools import ToolDispatcher
 
 if TYPE_CHECKING:  # pragma: no cover
     import anthropic
-    from chat_client_api import ChatClient  # type: ignore[import-untyped]
+    from chat_client_api import ChatClient
     from issue_tracker_client_api import Client as IssueTrackerClient
 
 logger = logging.getLogger(__name__)

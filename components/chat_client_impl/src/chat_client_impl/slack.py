@@ -33,7 +33,7 @@ import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from chat_client_api import (  # type: ignore[import-untyped]
+from chat_client_api import (
     ChannelNotFoundError,
     ChatClient,
     ChatError,
@@ -45,7 +45,7 @@ from chat_client_api import (  # type: ignore[import-untyped]
 from slack_client_impl.client import SlackClient
 
 if TYPE_CHECKING:
-    from chat_client_api import Channel  # type: ignore[import-untyped]
+    from chat_client_api import Channel
 
 
 def _to_datetime(slack_ts: object) -> datetime:

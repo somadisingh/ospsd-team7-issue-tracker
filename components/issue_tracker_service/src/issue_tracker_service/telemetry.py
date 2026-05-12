@@ -155,7 +155,7 @@ def setup_telemetry(app: FastAPI) -> None:
         if trace_ep:
             t_provider = TracerProvider(resource=resource)
             t_provider.add_span_processor(
-                BatchSpanProcessor(OTLPSpanExporter(endpoint=trace_ep, headers=headers)),  # type: ignore[abstract]
+                BatchSpanProcessor(OTLPSpanExporter(endpoint=trace_ep, headers=headers)),
             )
             trace.set_tracer_provider(t_provider)
         else:
@@ -166,7 +166,7 @@ def setup_telemetry(app: FastAPI) -> None:
         metrics_ep = _metrics_endpoint()
         if metrics_ep:
             reader = PeriodicExportingMetricReader(
-                OTLPMetricExporter(endpoint=metrics_ep, headers=headers),  # type: ignore[abstract]
+                OTLPMetricExporter(endpoint=metrics_ep, headers=headers),
                 export_interval_millis=10_000,
             )
             metrics.set_meter_provider(MeterProvider(resource=resource, metric_readers=[reader]))
@@ -237,7 +237,7 @@ def setup_telemetry(app: FastAPI) -> None:
 
     if not _is_sdk_disabled():
         exclude = (os.environ.get("OTEL_PYTHON_FASTAPI_EXCLUDED_URLS") or "").strip() or None
-        FastAPIInstrumentor().instrument_app(app, excluded_urls=exclude)  # type: ignore[union-attr]
+        FastAPIInstrumentor().instrument_app(app, excluded_urls=exclude)
 
         global _requests_instrumented
         if not _requests_instrumented:

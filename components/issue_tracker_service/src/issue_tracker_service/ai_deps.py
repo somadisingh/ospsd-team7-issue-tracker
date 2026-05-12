@@ -25,7 +25,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from ai_client_api.client import AIClient
-from chat_client_api import (  # type: ignore[import-untyped]
+from chat_client_api import (
     ChatClient,
     get_client,
 )

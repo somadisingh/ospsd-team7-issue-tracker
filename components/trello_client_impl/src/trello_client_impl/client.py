@@ -8,11 +8,14 @@ lists whose names are matched (case-insensitive) to ``Status`` values:
   * "To Do" / "Backlog" → ``Status.TO_DO``
   * "In Progress" / "Doing" → ``Status.IN_PROGRESS``
   * "Done" / "Completed" → ``Status.COMPLETED``
+
+Unknown list names default to ``Status.TO_DO`` with a one-time ``WARNING`` log
+per distinct name; see ``DESIGN.md`` (Homework 3) for operational guidance.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import issue_tracker_client_api
 
@@ -27,7 +30,7 @@ from issue_tracker_client_api.exceptions import (
     ResourceNotFoundError,
     ServiceUnavailableError,
 )
-from requests_oauthlib import OAuth1, OAuth1Session  # type: ignore[import-untyped]
+from requests_oauthlib import OAuth1, OAuth1Session
 
 from .board import TrelloBoard, _is_trello_board_response
 from .issue import TrelloCard, _infer_status, _is_trello_card_response
@@ -230,7 +233,7 @@ class TrelloClient(Client):
         data = self._request("GET", f"/boards/{board_id}/lists")
         if not isinstance(data, list):
             return []
-        return data  # type: ignore[return-value]
+        return cast("list[dict[str, Any]]", data)
 
     def _list_id_for_status(self, board_id: str, status: Status) -> str:
         """Find the Trello list ID that corresponds to a Status value."""

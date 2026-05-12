@@ -45,6 +45,7 @@ class TestSchemas:
             "get_issue",
             "create_issue",
             "update_issue_status",
+            "assign_issue",
             "list_channels",
             "get_channel",
             "get_recent_messages",
@@ -55,6 +56,7 @@ class TestSchemas:
         names = {s["name"] for s in dispatcher_ro.schemas()}
         assert "create_issue" not in names
         assert "update_issue_status" not in names
+        assert "assign_issue" not in names
         assert "send_chat_message" not in names
 
     def test_no_delete_tools_anywhere(self, dispatcher_rw: ToolDispatcher) -> None:
@@ -133,6 +135,21 @@ class TestDispatch:
         )
         assert result["id"] == "i1"
         mock_issue_tracker.update_issue.assert_called_once()
+
+    def test_assign_issue_calls_client(
+        self,
+        dispatcher_rw: ToolDispatcher,
+        mock_issue_tracker: MagicMock,
+    ) -> None:
+        result = dispatcher_rw.dispatch(
+            "assign_issue",
+            {"issue_id": "i1", "member_id": "mem42"},
+        )
+        assert result == {"success": True}
+        mock_issue_tracker.assign_issue.assert_called_once_with(
+            issue_id="i1",
+            member_id="mem42",
+        )
 
     def test_get_recent_messages_from_mock_chat(
         self,

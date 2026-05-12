@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from ai_client_api import sanitize
 
 if TYPE_CHECKING:
-    from chat_client_api import Channel, Message  # type: ignore[import-untyped]
+    from chat_client_api import Channel, Message
     from issue_tracker_client_api import Board, Issue, List, Member
 
 

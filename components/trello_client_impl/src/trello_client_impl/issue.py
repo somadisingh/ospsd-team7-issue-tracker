@@ -47,7 +47,8 @@ def _infer_status(list_name: str) -> Status:
             return status
     if normalised and normalised not in _warned_unknown_status_lists:
         logger.warning(
-            "Unknown Trello list name '%s'; defaulting status to %s",
+            "Unknown Trello list name %r; defaulting status to %s "
+            "(rename the list or see DESIGN.md — list names → Status).",
             list_name,
             Status.TO_DO.value,
         )

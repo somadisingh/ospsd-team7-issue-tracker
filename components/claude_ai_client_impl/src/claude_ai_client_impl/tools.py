@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field, ValidationError
 from claude_ai_client_impl import serializers
 
 if TYPE_CHECKING:
-    from chat_client_api import ChatClient  # type: ignore[import-untyped]
+    from chat_client_api import ChatClient
     from issue_tracker_client_api import Client as IssueTrackerClient
 
 
@@ -62,6 +62,11 @@ class _CreateIssueArgs(BaseModel):
 class _UpdateStatusArgs(BaseModel):
     issue_id: str = Field(min_length=1, max_length=128)
     status: str = Field(min_length=1, max_length=40)
+
+
+class _AssignIssueArgs(BaseModel):
+    issue_id: str = Field(min_length=1, max_length=128)
+    member_id: str = Field(min_length=1, max_length=128)
 
 
 class _ChannelIdArgs(BaseModel):
@@ -218,6 +223,10 @@ class ToolDispatcher:
             updated = it.update_issue(issue_id=args.issue_id, status=status)
             return serializers.serialize_issue(updated)
 
+        def assign_issue(args: _AssignIssueArgs) -> dict[str, Any]:
+            ok = it.assign_issue(issue_id=args.issue_id, member_id=args.member_id)
+            return {"success": bool(ok)}
+
         def list_channels(_: _NoArgs) -> list[dict[str, Any]]:
             return [serializers.serialize_channel(c) for c in chat.get_channels()]
 
@@ -301,6 +310,16 @@ class ToolDispatcher:
                 ),
                 arg_model=_UpdateStatusArgs,
                 runner=update_issue_status,
+                mutating=True,
+            ),
+            "assign_issue": _Tool(
+                name="assign_issue",
+                description=(
+                    "Assign a board member to an issue by member id. "
+                    "Only call when the user explicitly asks to assign someone."
+                ),
+                arg_model=_AssignIssueArgs,
+                runner=assign_issue,
                 mutating=True,
             ),
             "list_channels": _Tool(

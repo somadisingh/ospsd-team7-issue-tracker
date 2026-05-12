@@ -7,7 +7,7 @@ from typing import Any
 from ai_client_api.exceptions import AIToolError
 from ai_client_api.resilience import IdempotencyMemory
 from ai_client_api.signature_tools import SignatureToolCatalog
-from chat_client_api import ChatClient  # type: ignore[import-untyped]
+from chat_client_api import ChatClient
 from claude_ai_client_impl import serializers
 from claude_ai_client_impl.prompt import SYSTEM_PROMPT
 from issue_tracker_client_api import Client as IssueTrackerClient
@@ -94,6 +94,15 @@ def build_domain_catalog(
             raise AIToolError(msg) from exc
         updated = it.update_issue(issue_id=issue_id, status=st)
         return serializers.serialize_issue(updated)
+
+    @cat.register(
+        "assign_issue",
+        "Assign a board member to an issue. Only when the user explicitly asks.",
+        mutating=True,
+    )
+    def assign_issue(issue_id: str, member_id: str) -> dict[str, Any]:
+        ok = it.assign_issue(issue_id=issue_id, member_id=member_id)
+        return {"success": bool(ok)}
 
     @cat.register(
         "list_channels",
