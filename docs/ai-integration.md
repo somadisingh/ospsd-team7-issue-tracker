@@ -2,7 +2,9 @@
 
 This project integrates **external LLMs** into the Trello-backed issue tracker:
 **Anthropic Claude** (default) or **OpenAI** (Chat Completions with function tools),
-selectable at runtime via `AI_PROVIDER`. Both stacks implement the same
+selectable at runtime via `AI_PROVIDER` (default for the process). Each
+`POST /ai/chat` may override that default for **that request only** with header
+`X-AI-Provider: claude` or `X-AI-Provider: openai` (case-insensitive). Both stacks implement the same
 **`AIClient`** contract from package **`ai_client_api`** (see
 `components/ai_client_api/src/ai_client_api/client.py` in the repo). FastAPI routes **`GET /ai/health`** and **`POST /ai/chat`**
 authenticate with the existing session flow and bind tools to the caller's
@@ -130,7 +132,8 @@ check in each provider's `dispatch()` also rejects them if they sneak in.
 
 | Variable        | Required | Default   | Purpose |
 | --------------- | -------- | --------- | ------- |
-| `AI_PROVIDER`   | no       | `claude`  | `claude` uses Anthropic; `openai` uses OpenAI Chat Completions. Any other value fails at client construction. |
+| `AI_PROVIDER`   | no       | `claude`  | Default stack: `claude` (Anthropic) or `openai` (OpenAI). Invalid values fail when building the default client. |
+| `X-AI-Provider` | no       | _(omit)_  | On **`POST /ai/chat`** only: send `claude` or `openai` to override `AI_PROVIDER` for that single request. Invalid values → **400**. |
 
 ### Claude (`AI_PROVIDER=claude` or unset)
 
@@ -190,7 +193,7 @@ Trello OAuth and database URLs are documented in [FastAPI Service](api/issue_tra
 ### `GET /ai/health`
 
 Liveness probe for the AI stack. Does **not** call the LLM — configuration only.
-The JSON includes **`provider`** (`claude` or `openai`) from `AI_PROVIDER`.
+The JSON includes **`provider`** (`claude` or `openai`) from **`AI_PROVIDER`** only (health does not read `X-AI-Provider`; use it to see which stack is configured as the server default).
 
 **Claude (default)** — checks `ClaudeConfig.from_env()`.
 
@@ -258,7 +261,7 @@ Auth: `X-Session-Token: <from /auth/callback>`.
 
 | HTTP | Raised by                                   | Meaning                                              |
 | ---- | ------------------------------------------- | ---------------------------------------------------- |
-| 400  | `AIUnsafeRequestError`, `AIToolError`       | Prompt rejected by sanitizer, or tool args invalid / mutation blocked. |
+| 400  | `AIUnsafeRequestError`, `AIToolError`, invalid `X-AI-Provider` | Prompt rejected, tool args invalid / mutation blocked, or header not `claude` / `openai`. |
 | 401  | `_authenticated_issue_tracker` (missing/bad `X-Session-Token`) | No Trello session.                    |
 | 422  | `AIStructuredOutputError`                  | Structured final JSON invalid when `AI_STRUCTURED_OUTPUT=true`. |
 | 502  | `AIProviderError`                           | Upstream LLM failure (rate limit, 5xx, timeout). |

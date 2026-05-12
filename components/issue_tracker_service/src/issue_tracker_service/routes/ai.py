@@ -1,7 +1,8 @@
 """AI assistant routes.
 
 ``POST /ai/chat``  — user prompt → AI reply (optionally runs tools); requires ``X-Session-Token``.
-``GET  /ai/health`` — verifies the AI stack can be constructed; no session or upstream LLM call.
+Optional header ``X-AI-Provider: claude`` or ``openai`` overrides ``AI_PROVIDER`` for that request only.
+``GET  /ai/health`` — verifies the AI stack can be constructed; no session or upstream LLM call (reflects ``AI_PROVIDER`` default only).
 
 The chat route authenticates with the existing ``X-Session-Token`` flow and
 reuse the authenticated ``TrelloClient`` via dependency injection. The
@@ -144,11 +145,13 @@ async def ai_chat(
     body: AIChatRequest,
     ai: AIClient = Depends(get_ai_client),
 ) -> AIChatResponse:
-    """Send ``body.prompt`` to the **server-configured** LLM (Claude or OpenAI).
+    """Send ``body.prompt`` to the LLM (Claude or OpenAI).
 
-    The implementation is chosen via ``AI_PROVIDER`` in the service environment,
-    not via this JSON body. Returns the final answer and a per-request tool
-    action log.
+    Default stack comes from ``AI_PROVIDER`` in the service environment.
+    Optional header ``X-AI-Provider: claude`` or ``openai`` overrides that for
+    this request only (see OpenAPI **Parameters** for this route). The JSON
+    body does not select the provider. Returns the final answer and a per-request
+    tool action log.
     """
     context: dict[str, Any] = {}
     if body.board_id is not None:

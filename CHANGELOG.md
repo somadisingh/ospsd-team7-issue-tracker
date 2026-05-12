@@ -19,5 +19,6 @@ Aligning with the course **shared issue-tracker API** and regenerated OpenAPI cl
 ### AI assistant
 
 - New routes under **`/ai`**: health probe and authenticated chat. See **`docs/ai-integration.md`**.
+- **`POST /ai/chat`** accepts optional header **`X-AI-Provider: claude`** or **`openai`** to choose the LLM stack for that request; omit it to use **`AI_PROVIDER`** from the environment. **`GET /ai/health`** still reports the env default only.
 - LLM tool catalogue includes **issue assignment** via **`assign_issue`** (issue id + member id), plus existing board/issue/chat tools.
 - Optional e2e: set **`E2E_DEPLOYED_HEALTH=1`** and **`SERVICE_BASE_URL`** to run **`tests/e2e/service_health_e2e_tests.py`** (`GET /health` on the deployed service).
