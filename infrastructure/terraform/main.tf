@@ -5,6 +5,16 @@ locals {
 
   use_anthropic = local.manage_tf ? (trimspace(var.anthropic_api_key) != "") : var.provision_anthropic_secret_shell
 
+  use_openai = local.manage_tf ? (trimspace(var.openai_api_key) != "") : var.provision_openai_secret_shell
+  mount_openai_api_key_on_cloud_run = (
+    (local.manage_tf && trimspace(var.openai_api_key) != "")
+    || (
+      !local.manage_tf && var.provision_openai_secret_shell
+      && trimspace(var.openai_api_key_secret_version) != ""
+    )
+  )
+  openai_api_key_sm_version = local.manage_tf ? "latest" : trimspace(var.openai_api_key_secret_version)
+
   # Secret Manager resource for OTLP headers
   use_otlp_headers = local.manage_tf ? (trimspace(var.otel_exporter_otlp_headers) != "") : var.provision_otlp_headers_secret_shell
   mount_otlp_headers_on_cloud_run = (
@@ -17,6 +27,8 @@ locals {
   version_trello   = local.manage_tf ? 1 : 0
 
   version_anthropic = (local.manage_tf && local.use_anthropic) ? 1 : 0
+
+  version_openai = (local.manage_tf && local.use_openai) ? 1 : 0
 
   version_otlp = (local.manage_tf && local.use_otlp_headers) ? 1 : 0
 
@@ -60,6 +72,11 @@ locals {
       secret  = "${var.secret_name_prefix}-anthropic-api-key"
       version = "latest"
     }] : [],
+    local.mount_openai_api_key_on_cloud_run ? [{
+      name    = "OPENAI_API_KEY"
+      secret  = "${var.secret_name_prefix}-openai-api-key"
+      version = local.openai_api_key_sm_version
+    }] : [],
     local.mount_otlp_headers_on_cloud_run ? [{
       name    = "OTEL_EXPORTER_OTLP_HEADERS"
       secret  = "${var.secret_name_prefix}-otlp-headers"
@@ -80,6 +97,11 @@ locals {
     ? nonsensitive(length(trimspace(var.anthropic_api_key)) > 0)
     : var.provision_anthropic_secret_shell
   )
+  _accessor_include_openai = (
+    var.manage_secret_versions_in_terraform
+    ? nonsensitive(length(trimspace(var.openai_api_key)) > 0)
+    : var.provision_openai_secret_shell
+  )
   _accessor_include_otlp = (
     var.manage_secret_versions_in_terraform
     ? nonsensitive(length(trimspace(var.otel_exporter_otlp_headers)) > 0)
@@ -93,6 +115,7 @@ locals {
       "${var.secret_name_prefix}-trello-api-secret",
     ],
     local._accessor_include_anthropic ? ["${var.secret_name_prefix}-anthropic-api-key"] : [],
+    local._accessor_include_openai ? ["${var.secret_name_prefix}-openai-api-key"] : [],
     local._accessor_include_otlp ? ["${var.secret_name_prefix}-otlp-headers"] : [],
     values(var.cloud_run_secret_environment_variables),
   ))
@@ -215,6 +238,28 @@ resource "google_secret_manager_secret_version" "anthropic" {
   }
 }
 
+resource "google_secret_manager_secret" "openai" {
+  count     = local.use_openai ? 1 : 0
+  secret_id = "${var.secret_name_prefix}-openai-api-key"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.enabled]
+}
+
+resource "google_secret_manager_secret_version" "openai" {
+  count = local.version_openai
+
+  secret      = google_secret_manager_secret.openai[count.index].id
+  secret_data = var.openai_api_key
+
+  lifecycle {
+    ignore_changes = [secret_data]
+  }
+}
+
 resource "google_secret_manager_secret" "otlp_headers" {
   count     = local.use_otlp_headers ? 1 : 0
   secret_id = "${var.secret_name_prefix}-otlp-headers"
@@ -250,6 +295,7 @@ resource "google_secret_manager_secret_iam_member" "run_accessor" {
     google_secret_manager_secret.trello_api_key,
     google_secret_manager_secret.trello_api_secret,
     google_secret_manager_secret.anthropic,
+    google_secret_manager_secret.openai,
     google_secret_manager_secret.otlp_headers,
   ]
 }

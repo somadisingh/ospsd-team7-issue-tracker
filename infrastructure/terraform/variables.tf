@@ -131,6 +131,35 @@ variable "provision_anthropic_secret_shell" {
   default     = false
 }
 
+variable "openai_api_key" {
+  description = <<-EOT
+    When manage_secret_versions_in_terraform is true and non-empty, creates secret + OPENAI_API_KEY binding
+    (same as other AI keys).
+    Mode A shell-only deployments use provision_openai_secret_shell + non-empty openai_api_key_secret_version after gcloud uploads the payload.
+  EOT
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "provision_openai_secret_shell" {
+  description = "When manage_secret_versions_in_terraform is false, set true to allocate the OpenAI secret shell (payload via GCP only)."
+  type        = bool
+  default     = false
+}
+
+variable "openai_api_key_secret_version" {
+  description = <<-EOT
+    When manage_secret_versions_in_terraform is false: set non-empty Secret Manager version id after
+    `gcloud secrets versions add …` so Cloud Run can mount OPENAI_API_KEY (GCP rejects referencing
+    secrets with no versions). Use "latest" or a numeric id (e.g. "1"). Leave empty until a version exists.
+    When manage_secret_versions_in_terraform is true with openai_api_key set, mounting uses "latest" and this variable is unused.
+  EOT
+  type        = string
+  sensitive   = false
+  default     = ""
+}
+
 variable "provision_otlp_headers_secret_shell" {
   description = "When manage_secret_versions_in_terraform is false, set true to allocate OTLP headers secret shell (payload via GCP only)."
   type        = bool

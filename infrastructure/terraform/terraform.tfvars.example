@@ -14,6 +14,7 @@ deploy_cloud_run_service            = true
 # manage_secret_versions_in_terraform = false
 # deploy_cloud_run_service           = false
 # provision_anthropic_secret_shell  = false
+# provision_openai_secret_shell      = false
 # provision_otlp_headers_secret_shell = false
 #
 # 1) terraform apply -var-file=secrets.tfvars   # creates shells + Artifact Registry IAM; no Cloud Run
@@ -25,7 +26,6 @@ deploy_cloud_run_service            = true
 database_url       = "postgresql+psycopg://...@...:5432/postgres"
 trello_api_key     = "(from Trello Power-Up Admin)"
 trello_api_secret  = "(consumer secret)"
-
 trello_callback_url = ""
 
 # --- Plain vs secret (Mode A: manage_secret_versions_in_terraform = false) -----------------
