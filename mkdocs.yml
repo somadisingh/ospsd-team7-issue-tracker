@@ -21,13 +21,22 @@ theme:
 nav:
   - "Overview": "index.md"
   - "Architecture": "architecture.md"
+  - "AI Integration": "ai-integration.md"
+  - "Cross-Vertical Chat (Slack)": "cross-vertical-slack.md"
+  - "Deployment": "deployment.md"
   - "API Reference":
     - "Issue Tracker Client API": "api/issue_tracker_client_api.md"
     - "Trello Client Implementation": "api/trello_client_impl.md"
     - "FastAPI Service": "api/issue_tracker_service.md"
     - "Service Client Adapter": "api/issue_tracker_adapter.md"
+    - "Chat Client API": "api/chat_client_api.md"
   - "Code Quality": "code-quality.md"
   - "CI/CD": "ci-cd.md"
+  - "Testing":
+    - "Testing guide": "testing/TESTING.md"
+    - "Test files reference": "testing/TEST_FILES_REFERENCE.md"
+  - "Operations":
+    - "Grafana KPI Runbook": "monitoring/grafana-kpi-runbook.md"
 
 markdown_extensions:
   - pymdownx.highlight:

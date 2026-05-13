@@ -39,7 +39,7 @@ jobs:
 
       - run:
           name: Mypy (static type checking)
-          command: uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src components/issue_tracker_adapter/src components/issue_tracker_service/src
+          command: uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src components/issue_tracker_adapter/src components/issue_tracker_service/src components/ai_client_api/src components/claude_ai_client_impl/src components/openai_ai_client_impl/src components/chat_client_impl/src
 
   test:
     docker:
@@ -74,6 +74,7 @@ jobs:
       - run:
           name: Run tests (unit, integration, e2e)
           command: |
+            export OTEL_SDK_DISABLED=true
             mkdir -p test-results
             uv run pytest \
               -m "unit or integration or e2e" \
@@ -117,26 +118,41 @@ jobs:
       - run:
           name: Start service and health check
           command: |
+            export DATABASE_URL="sqlite+pysqlite:///:memory:"
+            export OTEL_SDK_DISABLED=true
             uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port 8000 &
             sleep 5
             curl -sf http://localhost:8000/health || exit 1
 
-  deploy:
+  validate_infra:
     docker:
       - image: cimg/python:3.12
     steps:
+      - checkout
       - run:
-          name: Trigger Render deploy
+          name: Validate Terraform
           command: |
-            if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-              echo "RENDER_DEPLOY_HOOK_URL not set; skipping deploy"
-              exit 0
-            fi
-            curl -X POST -f -s -o /dev/null -w "%{http_code}" "$RENDER_DEPLOY_HOOK_URL" | grep -qE '^2[0-9]{2}$' || {
-              echo "Render deploy hook returned non-2xx"
-              exit 1
-            }
-            echo "Render deploy triggered successfully"
+            set -eu
+            TVER=1.10.5
+            curl -sSfL -o terraform.zip \
+              "https://releases.hashicorp.com/terraform/${TVER}/terraform_${TVER}_linux_amd64.zip"
+            unzip -o terraform.zip terraform
+            chmod +x terraform
+            mkdir -p /tmp/tf-"$TVER" && mv terraform /tmp/tf-"$TVER"/
+            export PATH="/tmp/tf-$TVER:${PATH}"
+            cd infrastructure/terraform
+            terraform fmt -check -recursive
+            terraform init -backend=false -input=false
+            terraform validate
+
+  deploy_gcp:
+    docker:
+      - image: google/cloud-sdk:stable
+    steps:
+      - checkout
+      - run:
+          name: GCP Cloud Build and Cloud Run rollout
+          command: bash .circleci/gcp_deploy.sh
 
 workflows:
   version: 2
@@ -145,8 +161,15 @@ workflows:
       - lint
       - test
       - health_check
-      - deploy:
+      - validate_infra
+      - deploy_gcp:
           requires:
             - lint
             - test
             - health_check
+            - validate_infra
+          filters:
+            branches:
+              only:
+                - main
+                - hw3

@@ -115,6 +115,7 @@ strict = true
 explicit_package_bases = true  # Required for src layout
 mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src", "components/issue_tracker_adapter/src", "components/issue_tracker_service/src", "components/issue_tracker_service_api_client"]
 ignore_missing_imports = false
+warn_unused_ignores = true   # stale `# type: ignore` must be removed (root pyproject)
 show_error_codes = true
 ```
 

@@ -2,18 +2,17 @@
 
 # import logging
 from typing import Dict
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 from uuid import uuid4
 
-from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
+from issue_tracker_service.db.engine import get_engine
+from issue_tracker_service.db.sessions import create_session
 from trello_client_impl.client import TrelloClient
-
-# Load .env file at module import time
-load_dotenv()
 
 # Configure logging
 # logger = logging.getLogger(__name__)
@@ -55,12 +54,12 @@ def _trello_config() -> Dict[str, str]:
     return {
         "api_key": api_key,
         "secret": secret,
-        "callback_url": os.getenv("TRELLO_CALLBACK_URL", "http://localhost:8000/auth/callback"),
+        "callback_url": os.getenv("TRELLO_CALLBACK_URL", "").strip(),
     }
 
 
 @router.get("/login")
-async def auth_login() -> RedirectResponse:
+async def auth_login(request: Request) -> RedirectResponse:
     """Initiate OAuth 1.0 flow with Trello.
 
     Redirects user to Trello authorization page.
@@ -72,8 +71,9 @@ async def auth_login() -> RedirectResponse:
         HTTPException: If request token fetch fails.
     """
     config = _trello_config()
+    callback_url = config["callback_url"] or f"{str(request.base_url).rstrip('/')}/auth/callback"
     client = TrelloClient(api_key=config["api_key"], secret=config["secret"])
-    auth_url = client.get_authorization_url(callback_url=config["callback_url"])
+    auth_url = client.get_authorization_url(callback_url=callback_url)
     parsed = parse_qs(urlparse(auth_url).query)
     request_token = parsed.get("oauth_token", [None])[0]
     if not request_token:
@@ -83,10 +83,20 @@ async def auth_login() -> RedirectResponse:
         raise HTTPException(status_code=500, detail="Missing request token secret from Trello client")
 
     oauth1_request_secrets[request_token] = client.request_token_secret
-    # logger.info(f"Stored request_token: {request_token}")
-    # logger.info(f"Available tokens in cache: {list(oauth1_request_secrets.keys())}")
 
-    return RedirectResponse(url=auth_url, status_code=302)
+    # Trello's OAuth authorize endpoint defaults to scope=read only. Without
+    # explicit read,write the issued access token can list boards but every
+    # POST/PUT/DELETE comes back 401. Also set a friendly name and a long-ish
+    # expiration so the user isn't re-authorizing every hour.
+    extra_params = urlencode(
+        {
+            "name": "ospsd-team7-local",
+            "scope": "read,write",
+            "expiration": "1day",
+        }
+    )
+    separator = "&" if "?" in auth_url else "?"
+    return RedirectResponse(url=f"{auth_url}{separator}{extra_params}", status_code=302)
 
 
 @router.get("/callback", response_model=AuthCallbackResponse)
@@ -118,9 +128,6 @@ async def auth_callback(
     Raises:
         HTTPException: If token exchange fails or token is invalid.
     """
-    # Import here to avoid circular imports
-    from issue_tracker_service.main import user_sessions
-
     # logger.info(f"Callback received with oauth_token: {oauth_token}")
     # logger.info(f"Available tokens in cache: {list(oauth1_request_secrets.keys())}")
 
@@ -147,10 +154,12 @@ async def auth_callback(
         raise HTTPException(status_code=500, detail="Failed to obtain access token")
 
     session_token = uuid4().hex
-    user_sessions[session_token] = {
-        "access_token": client.token,
-        "access_token_secret": client.access_token_secret,
-    }
+    with Session(get_engine(), expire_on_commit=False) as db:
+        create_session(
+            db,
+            session_token=session_token,
+            access_token=client.token,
+            access_token_secret=client.access_token_secret,
+        )
 
-    # return AuthCallbackResponse(session_token=session_token, session_user_token=client.token)
     return AuthCallbackResponse(session_token=session_token)

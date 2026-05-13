@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
-
-from ..types import UNSET, Unset
 
 T = TypeVar("T", bound="BoardResponse")
 
@@ -16,36 +14,26 @@ class BoardResponse:
     """
     Attributes:
         id (str):
-        name (str):
-        url (None | str | Unset):
+        board_name (str):
     """
 
     id: str
-    name: str
-    url: None | str | Unset = UNSET
+    board_name: str
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         id = self.id
 
-        name = self.name
-
-        url: None | str | Unset
-        if isinstance(self.url, Unset):
-            url = UNSET
-        else:
-            url = self.url
+        board_name = self.board_name
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
                 "id": id,
-                "name": name,
+                "board_name": board_name,
             }
         )
-        if url is not UNSET:
-            field_dict["url"] = url
 
         return field_dict
 
@@ -54,21 +42,11 @@ class BoardResponse:
         d = dict(src_dict)
         id = d.pop("id")
 
-        name = d.pop("name")
-
-        def _parse_url(data: object) -> None | str | Unset:
-            if data is None:
-                return data
-            if isinstance(data, Unset):
-                return data
-            return cast(None | str | Unset, data)
-
-        url = _parse_url(d.pop("url", UNSET))
+        board_name = d.pop("board_name")
 
         board_response = cls(
             id=id,
-            name=name,
-            url=url,
+            board_name=board_name,
         )
 
         board_response.additional_properties = d

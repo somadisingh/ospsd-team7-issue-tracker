@@ -2,13 +2,13 @@
 
 ## Overview
 
-`issue_tracker_service` is a FastAPI application that wraps the `trello_client_impl` behind REST endpoints with OAuth 1.0a session-based authentication. It is the main deployment unit for this project, deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com).
+`issue_tracker_service` is a FastAPI application that wraps the `trello_client_impl` behind REST endpoints with OAuth 1.0a session-based authentication. It is the main deployment unit for this project (**Google Cloud Run** — see repository **`README.md`** and **`infrastructure/terraform/`**).
 
 ## Purpose
 
 - **HTTP API:** Exposes all `Client` operations as REST endpoints (boards, lists, issues, members).
 - **OAuth 1.0a:** Provides `/auth/login` and `/auth/callback` endpoints for the Trello OAuth flow, issuing server-side session tokens.
-- **Health check:** `GET /health` returns `{"status": "ok"}` for liveness probes.
+- **Health check:** `GET /health` returns `200` with JSON status (and DB connectivity when configured).
 - **Dependency injection:** Uses FastAPI's `Depends()` to inject an authenticated `TrelloClient` into every endpoint handler.
 
 ## Architecture
@@ -40,96 +40,119 @@ Browser/Client
 
 1. Client visits `GET /auth/login` — service fetches an OAuth request token from Trello and redirects the user to Trello's authorization page.
 2. After the user authorizes, Trello redirects to `GET /auth/callback?oauth_token=...&oauth_verifier=...`.
-3. The service exchanges the request token for an access token, creates an in-memory session, and returns a `session_token`.
+3. The service exchanges the request token for an access token, persists the session in the database, and returns a `session_token`.
 4. All subsequent API calls include `X-Session-Token: <session_token>` in the header.
 
 > **Note:** Trello uses OAuth 1.0a (not OAuth 2.0). This implementation follows the provider's required protocol.
 
 ### Environment variables
 
-| Variable | Required | Description |
-|---|---|---|
-| `TRELLO_API_KEY` | Yes | Trello API key |
-| `TRELLO_API_SECRET` | Yes | Trello API secret (consumer secret) |
-| `TRELLO_CALLBACK_URL` | No | OAuth callback URL (defaults to `http://localhost:8000/auth/callback`) |
+| Variable              | Required | Description                                                            |
+| --------------------- | -------- | ---------------------------------------------------------------------- |
+| `TRELLO_API_KEY`      | Yes      | Trello API key                                                         |
+| `TRELLO_API_SECRET`   | Yes      | Trello API secret (consumer secret)                                    |
+| `DATABASE_URL`        | Yes      | SQLAlchemy URL (e.g. Supabase, or local SQLite/Postgres) |
+| `TRELLO_CALLBACK_URL` | No       | OAuth callback URL. If unset, `/auth/login` derives it from the incoming request host (`https://<host>/auth/callback`). |
+
+### Telemetry (Prometheus + optional OpenTelemetry)
+
+The service always exposes Prometheus metrics at **`GET /metrics`** (disable with `PROMETHEUS_METRICS_ENABLED=false`) and can export **OTLP/HTTP** traces and metrics when endpoints and optional headers are set. See repository **`.env.example`**.
+
+| Variable | Role |
+| -------- | ---- |
+| `PROMETHEUS_METRICS_ENABLED` | Enables `/metrics` scrape endpoint (default `true`). |
+| `OTEL_SERVICE_NAME` | Logical service name in OTLP backend (default: `issue-tracker-service`). |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Full URL to `.../v1/traces` (or set `OTEL_EXPORTER_OTLP_ENDPOINT` base; see `.env.example`). |
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | Full URL to `.../v1/metrics` (optional if derived from traces URL). |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Comma-separated `Key=Value` auth headers for your vendor. |
+| `OTEL_SDK_DISABLED` | Set to `true` for local/CI when you are not sending data to a collector. |
+
+**Prometheus metrics emitted (for dashboards):**
+
+- `issue_tracker_http_request_duration_seconds` with labels `method`, `route`, `status`
+- `issue_tracker_http_requests_total` with labels `method`, `route`, `status`
+- `issue_tracker_http_request_outcomes_total` with labels `method`, `route`, `status`, `outcome`, `failure_kind`
+
+`failure_kind` values are `domain`, `infrastructure`, or `none`; exception handlers set `request.state.error_kind` so domain/infrastructure classification is explicit even when status class alone is ambiguous.
+
+**OTel metrics (when OTLP is configured):** `http.server.request.duration`, `http.server.responses` with route/method/status attributes.
+
+Prebuilt Grafana dashboard JSON is available at `infrastructure/monitoring/grafana/dashboards/issue-tracker-kpis.json`, with provisioning config in `infrastructure/monitoring/grafana/provisioning/`.
+
+**Migrations:** On **Cloud Run**, **`docker-entrypoint.sh`** runs **`alembic upgrade head`** before **uvicorn** (override with **`SKIP_ALEMBIC=true`** only for debugging). Locally, from repo root: `uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head`.
 
 ## API Reference
 
 ### Authentication
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/auth/login` | Initiate OAuth flow (redirects to Trello) |
-| `GET` | `/auth/callback` | Handle OAuth callback, returns `session_token` |
+| Method | Path             | Description                                    |
+| ------ | ---------------- | ---------------------------------------------- |
+| `GET`  | `/auth/login`    | Initiate OAuth flow (redirects to Trello)      |
+| `GET`  | `/auth/callback` | Handle OAuth callback, returns `session_token` |
 
 ### Boards
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/boards` | List all boards for the authenticated user |
-| `GET` | `/boards/{board_id}` | Get a single board |
-| `POST` | `/boards` | Create a new board |
-| `POST` | `/boards/{board_id}/members` | Add a member to a board |
-| `GET` | `/boards/{board_id}/lists` | List all lists on a board |
+| Method | Path                         | Description                                |
+| ------ | ---------------------------- | ------------------------------------------ |
+| `GET`  | `/boards`                    | List all boards for the authenticated user |
+| `GET`  | `/boards/{board_id}`         | Get a single board                         |
+| `POST` | `/boards`                    | Create a new board                         |
+| `POST` | `/boards/{board_id}/members` | Add a member to a board                    |
+| `GET`  | `/boards/{board_id}/lists`   | List all lists on a board                  |
 
 ### Lists
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/lists/{list_id}` | Get a single list |
-| `POST` | `/lists` | Create a new list |
-| `PUT` | `/lists/{list_id}` | Rename a list |
-| `DELETE` | `/lists/{list_id}` | Archive a list |
-| `GET` | `/lists/{list_id}/issues` | Get issues in a list |
+| Method   | Path                      | Description          |
+| -------- | ------------------------- | -------------------- |
+| `GET`    | `/lists/{list_id}`        | Get a single list    |
+| `POST`   | `/lists`                  | Create a new list    |
+| `PUT`    | `/lists/{list_id}`        | Rename a list        |
+| `DELETE` | `/lists/{list_id}`        | Archive a list       |
+| `GET`    | `/lists/{list_id}/issues` | Get issues in a list |
 
 ### Issues
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/issues/{issue_id}` | Get a single issue |
-| `POST` | `/issues` | Create a new issue |
-| `PUT` | `/issues/{issue_id}/status` | Update issue status |
-| `DELETE` | `/issues/{issue_id}` | Delete an issue |
-| `GET` | `/issues/{issue_id}/members` | Get members assigned to an issue |
-| `POST` | `/issues/{issue_id}/assign` | Assign a member to an issue |
+| Method   | Path                         | Description                      |
+| -------- | ---------------------------- | -------------------------------- |
+| `GET`    | `/issues/{issue_id}`         | Get a single issue               |
+| `POST`   | `/issues`                    | Create a new issue               |
+| `PUT`    | `/issues/{issue_id}/status`  | Update issue status              |
+| `DELETE` | `/issues/{issue_id}`         | Delete an issue                  |
+| `GET`    | `/issues/{issue_id}/members` | Get members assigned to an issue |
+| `POST`   | `/issues/{issue_id}/assign`  | Assign a member to an issue      |
 
 ### Health
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/health` | Returns `{"status": "ok"}` |
+| Method | Path      | Description                |
+| ------ | --------- | -------------------------- |
+| `GET`  | `/health` | Returns `{"status": "ok"}` |
 
 ## Deployment
 
-The service is deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com) as a web service.
+Production hosting is modeled with **GCP Cloud Run + Terraform** at [`infrastructure/terraform/`](../../../infrastructure/terraform/) (Docker image builds from repo root; container runs Alembic then uvicorn). Details: [`../../../infrastructure/terraform/README.md`](../../../infrastructure/terraform/README.md).
 
-| Setting | Value |
-|---|---|
-| **Platform** | [Render](https://render.com) |
-| **URL** | `https://ospsd-team7-issue-tracker.onrender.com` |
-| **Build command** | `pip install uv && uv sync --all-extras` |
-| **Start command** | `uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port $PORT` |
-| **Python version** | 3.12 |
+| Setting            | Value                                                                       |
+| ------------------ | --------------------------------------------------------------------------- |
+| **Platform (GCP)** | [Google Cloud Run](https://cloud.google.com/run) + Terraform in-repo        |
+| **Example URLs**   | Cloud Run: `terraform output -raw service_url` |
 
-Environment variables (`TRELLO_API_KEY`, `TRELLO_API_SECRET`, `TRELLO_CALLBACK_URL`) are configured in the Render dashboard under **Environment > Secret Files / Environment Variables**.
+On **`main`** / **`hw3`**, CircleCI **`deploy_gcp`** runs **`gcloud builds submit`** and **`gcloud run services update`** once you configure GCP env vars (**`infrastructure/terraform/README.md`** → *CircleCI — app deploy only*). **Terraform `apply` is laptop-only.**
 
-CircleCI triggers a Render deploy hook after all lint, test, and health check jobs pass. See `.circleci/config.yml` for details.
+Environment secrets for Cloud Run land in **Secret Manager** via Terraform (`database_url`, Trello credentials, optional OTLP/Anthropic). Use `terraform output trello_callback_hint` to align **`TRELLO_CALLBACK_URL`** with the Cloud Run hostname after the first revision.
 
 ## Running locally
 
+Work in the **repository root** (so the root `.env` is loaded). `uv` resolves the package; you do not need to `cd` into `components/issue_tracker_service/`.
+
 ```bash
-# From the project root
 uv sync --all-extras
+# copy .env.example to .env in the repo root, or export variables
 
-# Set credentials
-export TRELLO_API_KEY="your_api_key"
-export TRELLO_API_SECRET="your_api_secret"
-
-# Start the server
 uv run uvicorn issue_tracker_service.main:app --reload
-
-# Visit http://localhost:8000/docs for interactive API documentation
+uv run alembic -c components/issue_tracker_service/alembic.ini upgrade head
 ```
+
+Open http://localhost:8000/docs for the interactive API.
 
 ## Testing
 

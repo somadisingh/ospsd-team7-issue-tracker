@@ -64,6 +64,13 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
+# Local SQLite databases (created by DATABASE_URL=sqlite+pysqlite:///./dev.db
+# and SQLite's WAL/journal sidecar files).
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
 # Flask stuff:
 instance/
 .webassets-cache
@@ -201,6 +208,7 @@ cython_debug/
 #  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
 #  refer to https://docs.cursor.com/context/ignore-files
+.cursor/
 .cursorignore
 .cursorindexingignore
 
@@ -216,3 +224,17 @@ token.json
 
 #oauth test files
 oauth_test.py
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+infrastructure/terraform/backend.hcl
+infrastructure/terraform/deploy.auto.tfvars
+infrastructure/terraform/terraform.tfvars

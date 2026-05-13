@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Abstract interface for the Issue Tracker client"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "ospd-issue-tracker-api",
+]
 
 [project.optional-dependencies]
 dev = [

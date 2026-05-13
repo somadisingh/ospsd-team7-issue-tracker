@@ -165,3 +165,60 @@ The adapter achieves **location transparency**: consumer code uses the same `Cli
 ![Issue Tracker Client Architecture](uml.png)
 
 The diagram is available as `docs/uml.png`. The source is in `docs/architecture.puml` (PlantUML) — you can render it with [PlantUML](https://www.plantuml.com/plantuml/uml/) or the `plantuml` CLI.
+
+---
+
+## 5. AI Vertical (HW3)
+
+HW3 adds an AI assistant that reuses the same interface/implementation pattern.
+Full details (safety posture, tool catalogue, endpoints, examples) are in the
+[AI Integration](ai-integration.md) page. The high-level wiring:
+
+```
+┌────────┐  HTTP   ┌────────────────────┐   DI     ┌──────────────────┐
+│ Client │────────▶│ FastAPI            │─────────▶│ ClaudeAIClient   │
+│ (web/  │         │ /ai/chat           │          │ (implements      │
+│  curl) │         │ routes/ai.py       │          │  AIClient ABC)   │
+└────────┘         └────────┬───────────┘          └────────┬─────────┘
+                            │                               │
+                            │ Depends(ai_deps.get_ai_client)│
+                            ▼                               ▼
+                  ┌──────────────────┐           ┌────────────────────┐
+                  │ TrelloClient     │◀──────────│ ToolDispatcher     │
+                  │ (user-scoped via │  tool     │ (allow-listed, arg-│
+                  │  X-Session-Token)│  dispatch │  validated, safety-│
+                  └──────────────────┘           │  gated mutations)  │
+                                                 └────────┬───────────┘
+                                                          │
+                                                          ▼
+                                                ┌──────────────────┐
+                                                │ ChatClient ABC   │
+                                                │ (MockChatClient  │
+                                                │  today; real chat│
+                                                │  impl later)     │
+                                                └──────────────────┘
+```
+
+### Interface / implementation split
+
+| Interface (ABC)     | Location                          | Concrete implementation        |
+| ------------------- | --------------------------------- | ------------------------------ |
+| `AIClient`          | `ai_client_api.client`            | `claude_ai_client_impl.ClaudeAIClient` |
+| `ToolDispatcher` (Protocol) | `ai_client_api.tool`      | `claude_ai_client_impl.ToolDispatcher` |
+| `Client` (issue tracker) | `issue_tracker_client_api`   | `trello_client_impl.TrelloClient`, `issue_tracker_adapter.ServiceClientAdapter` |
+| `ChatClient`        | `chat_client_api` (git dep)       | `claude_ai_client_impl.MockChatClient` (dev); pluggable real impl later |
+
+Consumers (the FastAPI route, tests) depend only on the ABCs. A second AI
+provider (OpenAI, Gemini) could be added by writing another
+`*_ai_client_impl` package with no route-level changes.
+
+### Why this pattern?
+
+- **Provider-agnostic route.** `routes/ai.py` knows nothing about Anthropic.
+  Swapping providers is a one-line change in `ai_deps.get_ai_client`.
+- **Hard safety boundary.** Tool allow-list, Pydantic arg validation, and
+  serializer projections live in the impl package — not in the model prompt.
+  The LLM cannot talk to Trello directly; it can only ask the dispatcher.
+- **Per-request auth scope.** The Trello client passed to the dispatcher is
+  the user's authenticated one (from `X-Session-Token`), so the LLM always
+  runs under the same privileges as the caller, never more.

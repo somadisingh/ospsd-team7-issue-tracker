@@ -1,4 +1,6 @@
-# Issue Tracker — Service-Based Design (Homework 2)
+# Issue Tracker — Service-Based Design (Homework 2 & 3)
+
+**Homework 3** (AI assistant, cross-vertical chat, shared vertical alignment, IaC, telemetry, and persistence) extends the same architecture; sections below marked for HW3 build on the HW2 service and adapter story.
 
 This document describes how the **Homework 1 library-based issue tracker** was extended with a **networked service**, an **OpenAPI-generated HTTP client**, and an **adapter** so application code can stay written against the same `Client` interface whether it uses the in-process Trello implementation or the remote service.
 
@@ -19,8 +21,13 @@ This document describes how the **Homework 1 library-based issue tracker** was e
 | **Auto-generated HTTP client** | `issue_tracker_service_client` | Typed client generated from the OpenAPI spec (e.g. via `openapi-python-client`). Knows how to call `/boards`, `/issues`, etc., but speaks in **HTTP + generated models**, not the domain `Client` ABC. |
 | **Adapter** | `issue_tracker_adapter` | `ServiceClientAdapter` implements `Client` by calling the generated client, mapping JSON/models to `ServiceBoard`, `ServiceIssue`, etc., and attaching the session token to each request. |
 | **Registration** | `issue_tracker_adapter.register()` | Replaces `issue_tracker_client_api.get_client` so consumers that already call `get_client(...)` receive a `ServiceClientAdapter` when the adapter is registered. |
+| **AI contract (HW3)** | `ai_client_api` | Provider-agnostic `AIClient` ABC, tool types, sanitization, structured-output helpers, and an optional `register_client` / `get_client()` factory for **library-style** use. |
+| **AI implementations (HW3)** | `claude_ai_client_impl`, `openai_ai_client_impl` | Concrete `AIClient` implementations (Anthropic, OpenAI) with typed tool catalogues wired to `issue_tracker_client_api.Client` and `chat_client_api.ChatClient`. |
+| **Chat vertical (HW3)** | `chat_client_impl`, `slack_client_impl` (pinned) | Shared **`chat-client-api`** contract; local in-memory backend by default, or Slack via `CHAT_BACKEND=slack` and `chat_client_api.register_client`. |
 
 **Interaction summary:** User code depends only on `issue_tracker_client_api`. Either `trello_client_impl` is imported (direct Trello) or `issue_tracker_adapter.register()` is called (remote service). The FastAPI process holds Trello credentials and OAuth session state; clients only need the service URL and a session token from `/auth/callback`.
+
+**AI in the HTTP service:** Routes under `/ai` obtain a concrete `AIClient` via FastAPI **`Depends(get_ai_client)`** (request-scoped `TrelloClient` + process-wide chat + `AI_PROVIDER`). That is **dependency injection at the app layer**, not `ai_client_api.get_client()`. The `ai_client_api` registry remains available for scripts or tests that import a provider package and call `get_client()` without running FastAPI.
 
 ### Request Flow
 
@@ -209,7 +216,7 @@ register()
 from issue_tracker_client_api import get_client
 
 client = get_client(
-    base_url="https://ospsd-team7-issue-tracker.onrender.com",
+    base_url="https://issue-tracker-service-688420327904.us-central1.run.app",
     session_token="<token from /auth/callback>",
 )
 board = client.get_board("board_id")  # ServiceClientAdapter → HTTP → FastAPI → TrelloClient
@@ -238,7 +245,7 @@ return ServiceBoard.from_response(self._ensure_board(result))
 - **`issue_tracker_service`:** FastAPI routes with **`TrelloClient` mocked** via dependency override — auth (`401` / `422`), validation, and successful JSON shapes for boards, lists, issues, members.
 - **`issue_tracker_adapter`:** `ServiceClientAdapter` and `get_client_impl` / `register` with **`unittest.mock.patch`** on generated API modules so no real HTTP runs in unit tests.
 - **`tests/integration`:** Interface compliance and adapter wiring against **mocked** HTTP or client behavior (see integration `conftest`).
-- **`tests/e2e`:** Optional **real Trello API** tests when `TRELLO_*` env vars are set; skipped otherwise.
+- **`tests/e2e`:** Optional **real Trello API** tests when `TRELLO_*` env vars are set; skipped otherwise. Includes **`ai_tools_trello_e2e_tests`**: the same **AI tool catalogue** (`ToolDispatcher`) invoked against a live `TrelloClient` (no LLM), to validate tool wiring end-to-end. Optional **`service_health_e2e_tests`**: set **`E2E_DEPLOYED_HEALTH=1`** and **`SERVICE_BASE_URL`** to assert **`GET /health`** returns 200 on the deployed service (black-box; no session token).
 
 ### Test types
 
@@ -262,6 +269,26 @@ return ServiceBoard.from_response(self._ensure_board(result))
 4. **Parity with HW1:** Integration tests ensure both Trello and adapter paths honor the same interface surface (method presence, callability) where applicable.
 
 Together, this checks that the adapter is not only a subclass but behaves as a drop-in **`Client`** for the operations covered by tests.
+
+---
+
+## Homework 3 additions (AI, cross-vertical, persistence, observability)
+
+### OAuth sessions and the database
+
+The FastAPI service stores **per-user Trello OAuth tokens** in the **`user_sessions`** SQL table (`UserSessionModel`), keyed by the opaque **`X-Session-Token`** returned from `/auth/callback`.
+
+- **Production / grading:** Point **`DATABASE_URL`** at **Postgres** (e.g. Cloud SQL) or at a **file-backed SQLite** DSN such as `sqlite:////var/data/sessions.db`. Tokens survive process restarts.
+- **SQLite `:memory:`:** If `DATABASE_URL` is `sqlite:///:memory:` (or equivalent), the SQL store exists only for the lifetime of one process — **sessions are lost on restart**. Suitable for unit tests, not for durable production sessions.
+- **Terraform:** `infrastructure/terraform/` provisions Cloud Run and related resources; see repository root **README** for deploy flow.
+
+### Trello list names → `Status`
+
+Trello columns are matched by **name** (case-insensitive substrings) to shared-vertical **`Status`** values. List names that do **not** match any known pattern are mapped to **`to_do`** and a **`WARNING`** is logged **once per distinct unknown name** (see `trello_client_impl.issue._infer_status`). Prefer renaming lists on the board to standard names ("To Do", "In Progress", "Done", …) so status reflects the board accurately.
+
+### Observability
+
+The service exposes **Prometheus** metrics at **`GET /metrics`** (when enabled) and can export **OpenTelemetry** traces/metrics to OTLP HTTP endpoints configured via **`OTEL_EXPORTER_OTLP_*`**. Grafana dashboard JSON lives under **`infrastructure/monitoring/grafana/dashboards/`**.
 
 ---
 

@@ -9,7 +9,7 @@ from issue_tracker_client_api.exceptions import (
     ServiceUnavailableError,
     ValidationError,
 )
-from issue_tracker_client_api.issue import Issue, get_issue
+from issue_tracker_client_api.issue import Issue, Status, get_issue
 from issue_tracker_client_api.list import List, get_list
 from issue_tracker_client_api.member import Member, get_member
 
@@ -23,6 +23,7 @@ __all__ = [
     "Member",
     "ResourceNotFoundError",
     "ServiceUnavailableError",
+    "Status",
     "ValidationError",
     "get_board",
     "get_client",

@@ -56,6 +56,8 @@ The testing framework includes:
    - Interface compliance in production scenarios
    - Authentication workflows
 
+   **Optional deployed probe:** `tests/e2e/service_health_e2e_tests.py` hits **`GET {SERVICE_BASE_URL}/health`** when **`E2E_DEPLOYED_HEALTH=1`** (and `SERVICE_BASE_URL` is set). Skips by default so CI does not depend on external uptime. Use in pre-release checks or the HW3 demo pipeline.
+
 ## Directory Structure
 
 ```
@@ -186,7 +188,7 @@ open htmlcov/index.html
 
 ### Coverage Settings
 
-- **Minimum threshold**: 85% (configured in `pyproject.toml`)
+- **Minimum threshold**: 90% (configured in `pyproject.toml`)
 - **Configuration file**: `.coveragerc`
 - **HTML output directory**: `htmlcov/`
 

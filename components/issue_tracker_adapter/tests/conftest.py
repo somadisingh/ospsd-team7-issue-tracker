@@ -4,6 +4,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from issue_tracker_service_client.types import Unset
 
 
 @pytest.fixture
@@ -11,7 +12,7 @@ def mock_board_response() -> MagicMock:
     """Provide a mock BoardResponse from the auto-generated client."""
     resp = MagicMock()
     resp.id = "board_123"
-    resp.name = "Test Board"
+    resp.board_name = "Test Board"
     return resp
 
 
@@ -21,8 +22,10 @@ def mock_issue_response() -> MagicMock:
     resp = MagicMock()
     resp.id = "issue_456"
     resp.title = "Test Issue"
-    resp.is_complete = False
-    resp.list_id = "list_789"
+    resp.desc = "Issue description"
+    resp.members = Unset()
+    resp.due_date = Unset()
+    resp.status = "to_do"
     resp.board_id = "board_123"
     return resp
 

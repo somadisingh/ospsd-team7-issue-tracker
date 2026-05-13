@@ -1,10 +1,21 @@
+"""FastAPI service exposing the shared issue-tracker API over HTTP.
+
+Implements the vertical's shared Board/Issue contract plus
+internal List and Member endpoints.
+"""
+
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional
+import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from importlib import import_module
 
 import issue_tracker_client_api
+from api.issue import Status
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from issue_tracker_client_api.exceptions import (
     AuthenticationError,
@@ -13,43 +24,130 @@ from issue_tracker_client_api.exceptions import (
     ServiceUnavailableError,
 )
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from trello_client_impl.client import TrelloClient
-from .routes.health import router as health_router
+
+from .db import get_db, get_session_credentials, init_db
 from .routes.auth import _trello_config, router as auth_router
+from .routes.health import router as health_router
+from .telemetry import setup_telemetry
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Issue Tracker Service", version="0.1.0")
 
-# Include routers
+def _set_error_kind(request: Request, *, kind: str) -> None:
+    """Store domain vs infrastructure error class for telemetry middleware."""
+    request.state.error_kind = kind
+
+
+def _load_shared_api_exception_types() -> dict[str, type[Exception]]:
+    """Best-effort loader for optional shared `api.exceptions` types."""
+    try:
+        module = import_module("api.exceptions")
+    except ModuleNotFoundError:
+        return {}
+
+    shared_names = (
+        "ObjectNotFoundError",
+        "ResourceNotFoundError",
+        "AuthenticationError",
+        "ValidationError",
+        "ServiceUnavailableError",
+        "IssueTrackerError",
+    )
+    loaded: dict[str, type[Exception]] = {}
+    for name in shared_names:
+        exc_cls = getattr(module, name, None)
+        if isinstance(exc_cls, type) and issubclass(exc_cls, Exception):
+            loaded[name] = exc_cls
+    return loaded
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    init_db()
+    yield
+
+
+app = FastAPI(
+    title="Issue Tracker Service",
+    version="0.3.0",
+    lifespan=lifespan,
+    openapi_tags=[
+        {
+            "name": "ai",
+            "description": (
+                "**Assistant** - tool-backed LLM access to the authenticated user's Trello and chat context "
+                "(see project docs for tool catalogue and safety rules).\n\n"
+                "**Provider** - Default is `claude` or `openai` from env `AI_PROVIDER` (deploy-time). "
+                "Each **`POST /ai/chat`** may override for that request only with header **`X-AI-Provider: claude`** or **`X-AI-Provider: openai`**. "
+                "`GET /ai/health` reports the default stack from env (not per-request overrides).\n\n"
+                "**GET /ai/health** - Configuration probe only (no LLM call, no session). Suitable for load balancers and uptime checks.\n\n"
+                "**POST /ai/chat** - Requires `X-Session-Token`. Optional `X-AI-Provider` as above. "
+                "Returns `reply` and `actions` (tool results). Input is untrusted, it can trigger tools. "
+                "With `AI_STRUCTURED_OUTPUT=true`, the server validates the model's final structured JSON (Claude and OpenAI), "
+                "**422** only if that parse fails, uncommon when the model follows the contract. See `docs/ai-integration.md`."
+            ),
+        },
+    ],
+)
+
+# Allow the deployed frontend (and local dev server) to call us. The
+# actual origins list is read from CORS_ALLOW_ORIGINS (comma-separated);
+# we default to the local Next.js dev host so `npm run dev` works.
+_cors_origins = [
+    origin.strip() for origin in os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000").split(",") if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
+
 app.include_router(health_router)
 app.include_router(auth_router)
+# AI router is included lazily so tests that don't need it don't force-import
+# the Anthropic SDK.
+try:  # pragma: no cover - exercised via integration tests
+    from .routes.ai import router as ai_router
 
-# In-memory state (mini-demo). Replace with per-user DB for production.
-user_sessions: Dict[str, Dict[str, str]] = {}
+    app.include_router(ai_router)
+except ImportError as _ai_import_err:  # pragma: no cover
+    logger.warning("AI router not loaded: %s", _ai_import_err)
+
+# ------------------------------------------------------------------ #
+# Exception handlers
+# ------------------------------------------------------------------ #
 
 
 @app.exception_handler(ResourceNotFoundError)
 async def _resource_not_found_handler(request: Request, exc: ResourceNotFoundError) -> JSONResponse:
+    _set_error_kind(request, kind="domain")
     logger.warning("Resource not found: %s", exc)
     return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
 @app.exception_handler(AuthenticationError)
 async def _authentication_error_handler(request: Request, exc: AuthenticationError) -> JSONResponse:
+    _set_error_kind(request, kind="domain")
     logger.warning("Upstream authentication error: %s", exc)
     return JSONResponse(status_code=401, content={"detail": str(exc)})
 
 
 @app.exception_handler(ServiceUnavailableError)
 async def _service_unavailable_handler(request: Request, exc: ServiceUnavailableError) -> JSONResponse:
+    _set_error_kind(request, kind="infrastructure")
     logger.error("Upstream service unavailable: %s", exc)
     return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 
 @app.exception_handler(IssueTrackerError)
 async def _issue_tracker_error_handler(request: Request, exc: IssueTrackerError) -> JSONResponse:
+    _set_error_kind(request, kind="infrastructure")
     logger.error("Issue tracker error: %s", exc)
     return JSONResponse(
         status_code=500,
@@ -57,48 +155,82 @@ async def _issue_tracker_error_handler(request: Request, exc: IssueTrackerError)
     )
 
 
-def _board_to_response(board: issue_tracker_client_api.Board) -> BoardResponse:
-    return BoardResponse(id=board.id, name=board.name)
+async def _shared_not_found_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    _set_error_kind(request, kind="domain")
+    logger.warning("Shared API resource not found: %s", exc)
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
-def _list_to_response(list_obj: issue_tracker_client_api.List) -> ListResponse:
-    return ListResponse(id=list_obj.id, name=list_obj.name, board_id=list_obj.board_id or "")
+async def _shared_authentication_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    _set_error_kind(request, kind="domain")
+    logger.warning("Shared API authentication error: %s", exc)
+    return JSONResponse(status_code=401, content={"detail": str(exc)})
 
 
-def _issue_to_response(issue: issue_tracker_client_api.Issue) -> IssueResponse:
-    return IssueResponse(
-        id=issue.id,
-        title=issue.title,
-        list_id=issue.list_id,
-        board_id=issue.board_id or "",
-        is_complete=issue.is_complete,
+async def _shared_validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    _set_error_kind(request, kind="domain")
+    logger.warning("Shared API validation error: %s", exc)
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+async def _shared_service_unavailable_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    _set_error_kind(request, kind="infrastructure")
+    logger.error("Shared API service unavailable: %s", exc)
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+
+async def _shared_issue_tracker_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    _set_error_kind(request, kind="infrastructure")
+    logger.error("Shared API issue tracker error: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Upstream service error: {exc}"},
     )
 
 
-def _member_to_response(member: issue_tracker_client_api.Member) -> MemberResponse:
-    return MemberResponse(
-        id=member.id,
-        username=member.username or "",
-    )
+def _register_shared_api_exception_handlers() -> None:
+    """Register optional handlers for shared `api.exceptions` hierarchy."""
+    shared_exceptions = _load_shared_api_exception_types()
+    if not shared_exceptions:
+        return
+
+    for exc_name in ("ObjectNotFoundError", "ResourceNotFoundError"):
+        if exc_cls := shared_exceptions.get(exc_name):
+            app.add_exception_handler(exc_cls, _shared_not_found_error_handler)
+    if exc_cls := shared_exceptions.get("AuthenticationError"):
+        app.add_exception_handler(exc_cls, _shared_authentication_error_handler)
+    if exc_cls := shared_exceptions.get("ValidationError"):
+        app.add_exception_handler(exc_cls, _shared_validation_error_handler)
+    if exc_cls := shared_exceptions.get("ServiceUnavailableError"):
+        app.add_exception_handler(exc_cls, _shared_service_unavailable_error_handler)
+    if exc_cls := shared_exceptions.get("IssueTrackerError"):
+        app.add_exception_handler(exc_cls, _shared_issue_tracker_error_handler)
+
+
+# ------------------------------------------------------------------ #
+# Response / request models
+# ------------------------------------------------------------------ #
 
 
 class BoardResponse(BaseModel):
     id: str
-    name: str
+    board_name: str
+
+
+class IssueResponse(BaseModel):
+    id: str
+    title: str
+    desc: str
+    members: list[str] | None = None
+    due_date: str | None = None
+    status: str
+    board_id: str
 
 
 class ListResponse(BaseModel):
     id: str
     name: str
     board_id: str
-
-
-class IssueResponse(BaseModel):
-    id: str
-    title: str
-    list_id: str
-    board_id: str
-    is_complete: bool
 
 
 class MemberResponse(BaseModel):
@@ -108,6 +240,28 @@ class MemberResponse(BaseModel):
 
 class CreateBoardRequest(BaseModel):
     name: str
+
+
+class UpdateBoardRequest(BaseModel):
+    name: str | None = None
+
+
+class CreateIssueRequest(BaseModel):
+    title: str
+    board_id: str
+    desc: str | None = None
+    members: list[str] | None = None
+    due_date: str | None = None
+    status: str = Status.TO_DO.value
+
+
+class UpdateIssueRequest(BaseModel):
+    title: str | None = None
+    desc: str | None = None
+    members: list[str] | None = None
+    due_date: str | None = None
+    status: str | None = None
+    board_id: str | None = None
 
 
 class CreateListRequest(BaseModel):
@@ -123,78 +277,175 @@ class AddMemberToBoardRequest(BaseModel):
     member_id: str
 
 
-class CreateIssueRequest(BaseModel):
-    title: str
-    list_id: str
-    description: Optional[str] = None
-
-
-class UpdateStatusRequest(BaseModel):
-    status: str
-
-
 class AssignIssueRequest(BaseModel):
     member_id: str
 
 
-def get_authenticated_client(x_session_token: str = Header(..., alias="X-Session-Token")) -> TrelloClient:
-    session = user_sessions.get(x_session_token)
-    if not session:
+# ------------------------------------------------------------------ #
+# Converters
+# ------------------------------------------------------------------ #
+
+
+def _board_to_response(board: issue_tracker_client_api.Board) -> BoardResponse:
+    return BoardResponse(id=board.id, board_name=board.board_name)
+
+
+def _issue_to_response(issue: issue_tracker_client_api.Issue) -> IssueResponse:
+    return IssueResponse(
+        id=issue.id,
+        title=issue.title,
+        desc=issue.desc,
+        members=issue.members,
+        due_date=issue.due_date,
+        status=issue.status.value,
+        board_id=issue.board_id,
+    )
+
+
+def _list_to_response(list_obj: issue_tracker_client_api.List) -> ListResponse:
+    return ListResponse(id=list_obj.id, name=list_obj.name, board_id=list_obj.board_id or "")
+
+
+def _member_to_response(member: issue_tracker_client_api.Member) -> MemberResponse:
+    return MemberResponse(
+        id=member.id,
+        username=member.username or "",
+    )
+
+
+# ------------------------------------------------------------------ #
+# Auth dependency
+# ------------------------------------------------------------------ #
+
+
+def get_authenticated_client(
+    x_session_token: str = Header(..., alias="X-Session-Token"),
+    db: Session = Depends(get_db),
+) -> TrelloClient:
+    creds = get_session_credentials(db, x_session_token)
+    if not creds:
         raise HTTPException(status_code=401, detail="Invalid or missing session token")
 
     config = _trello_config()
     return TrelloClient(
         api_key=config["api_key"],
         secret=config["secret"],
-        access_token=session["access_token"],
-        access_token_secret=session["access_token_secret"],
+        access_token=creds["access_token"],
+        access_token_secret=creds["access_token_secret"],
     )
 
 
-@app.get("/boards", response_model=List[BoardResponse])
+# ------------------------------------------------------------------ #
+# Board endpoints  (shared API)
+# ------------------------------------------------------------------ #
+
+
+@app.get("/boards", response_model=list[BoardResponse])
 async def list_boards(client: TrelloClient = Depends(get_authenticated_client)) -> list[BoardResponse]:
     return [_board_to_response(board) for board in client.get_boards()]
 
 
 @app.get("/boards/{board_id}", response_model=BoardResponse)
 async def get_board(board_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> BoardResponse:
-    board = client.get_board(board_id)
-    return _board_to_response(board)
+    return _board_to_response(client.get_board(board_id))
 
 
 @app.post("/boards", response_model=BoardResponse)
 async def create_board(
     req: CreateBoardRequest, client: TrelloClient = Depends(get_authenticated_client)
 ) -> BoardResponse:
-    board = client.create_board(name=req.name)
-    return _board_to_response(board)
+    return _board_to_response(client.create_board(name=req.name))
 
 
-@app.post("/boards/{board_id}/members", response_model=Dict[str, bool])
-async def add_member_to_board(
+@app.put("/boards/{board_id}", response_model=BoardResponse)
+async def update_board(
     board_id: str,
-    body: AddMemberToBoardRequest,
+    body: UpdateBoardRequest,
     client: TrelloClient = Depends(get_authenticated_client),
-) -> Dict[str, bool]:
-    success = client.add_member_to_board(board_id=board_id, member_id=body.member_id)
-    return {"success": success}
+) -> BoardResponse:
+    return _board_to_response(client.update_board(board_id=board_id, name=body.name))
 
 
-@app.get("/boards/{board_id}/lists", response_model=List[ListResponse])
+@app.delete("/boards/{board_id}", response_model=dict[str, bool])
+async def delete_board(board_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> dict[str, bool]:
+    return {"success": client.delete_board(board_id)}
+
+
+# ------------------------------------------------------------------ #
+# Issue endpoints  (shared API)
+# ------------------------------------------------------------------ #
+
+
+@app.get("/boards/{board_id}/issues", response_model=list[IssueResponse])
+async def get_issues(board_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> list[IssueResponse]:
+    return [_issue_to_response(issue) for issue in client.get_issues(board_id)]
+
+
+@app.get("/issues/{issue_id}", response_model=IssueResponse)
+async def get_issue(issue_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> IssueResponse:
+    return _issue_to_response(client.get_issue(issue_id))
+
+
+@app.post("/issues", response_model=IssueResponse)
+async def create_issue(
+    req: CreateIssueRequest, client: TrelloClient = Depends(get_authenticated_client)
+) -> IssueResponse:
+    status = Status(req.status)
+    return _issue_to_response(
+        client.create_issue(
+            title=req.title,
+            board_id=req.board_id,
+            desc=req.desc,
+            members=req.members,
+            due_date=req.due_date,
+            status=status,
+        )
+    )
+
+
+@app.put("/issues/{issue_id}", response_model=IssueResponse)
+async def update_issue(
+    issue_id: str,
+    body: UpdateIssueRequest,
+    client: TrelloClient = Depends(get_authenticated_client),
+) -> IssueResponse:
+    status = Status(body.status) if body.status is not None else None
+    return _issue_to_response(
+        client.update_issue(
+            issue_id=issue_id,
+            title=body.title,
+            desc=body.desc,
+            members=body.members,
+            due_date=body.due_date,
+            status=status,
+            board_id=body.board_id,
+        )
+    )
+
+
+@app.delete("/issues/{issue_id}", response_model=dict[str, bool])
+async def delete_issue(issue_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> dict[str, bool]:
+    return {"success": client.delete_issue(issue_id)}
+
+
+# ------------------------------------------------------------------ #
+# Internal List endpoints
+# ------------------------------------------------------------------ #
+
+
+@app.get("/boards/{board_id}/lists", response_model=list[ListResponse])
 async def get_lists(board_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> list[ListResponse]:
     return [_list_to_response(lst) for lst in client.get_lists(board_id)]
 
 
 @app.get("/lists/{list_id}", response_model=ListResponse)
 async def get_list(list_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> ListResponse:
-    lst = client.get_list(list_id)
-    return _list_to_response(lst)
+    return _list_to_response(client.get_list(list_id))
 
 
 @app.post("/lists", response_model=ListResponse)
 async def create_list(req: CreateListRequest, client: TrelloClient = Depends(get_authenticated_client)) -> ListResponse:
-    lst = client.create_list(board_id=req.board_id, name=req.name)
-    return _list_to_response(lst)
+    return _list_to_response(client.create_list(board_id=req.board_id, name=req.name))
 
 
 @app.put("/lists/{list_id}", response_model=ListResponse)
@@ -203,17 +454,15 @@ async def update_list(
     body: UpdateListRequest,
     client: TrelloClient = Depends(get_authenticated_client),
 ) -> ListResponse:
-    lst = client.update_list(list_id=list_id, name=body.name)
-    return _list_to_response(lst)
+    return _list_to_response(client.update_list(list_id=list_id, name=body.name))
 
 
-@app.delete("/lists/{list_id}", response_model=Dict[str, bool])
-async def delete_list(list_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> Dict[str, bool]:
-    result = client.delete_list(list_id)
-    return {"success": result}
+@app.delete("/lists/{list_id}", response_model=dict[str, bool])
+async def delete_list(list_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> dict[str, bool]:
+    return {"success": client.delete_list(list_id)}
 
 
-@app.get("/lists/{list_id}/issues", response_model=List[IssueResponse])
+@app.get("/lists/{list_id}/issues", response_model=list[IssueResponse])
 async def get_issues_in_list(
     list_id: str,
     max_issues: int = Query(100, ge=1, le=500),
@@ -222,47 +471,34 @@ async def get_issues_in_list(
     return [_issue_to_response(issue) for issue in client.get_issues_in_list(list_id=list_id, max_issues=max_issues)]
 
 
-@app.get("/issues/{issue_id}", response_model=IssueResponse)
-async def get_issue(issue_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> IssueResponse:
-    issue = client.get_issue(issue_id)
-    return _issue_to_response(issue)
+# ------------------------------------------------------------------ #
+# Internal Member endpoints
+# ------------------------------------------------------------------ #
 
 
-@app.post("/issues", response_model=IssueResponse)
-async def create_issue(
-    req: CreateIssueRequest, client: TrelloClient = Depends(get_authenticated_client)
-) -> IssueResponse:
-    issue = client.create_issue(title=req.title, list_id=req.list_id, description=req.description)
-    return _issue_to_response(issue)
-
-
-@app.put("/issues/{issue_id}/status", response_model=Dict[str, bool])
-async def update_issue_status(
-    issue_id: str,
-    body: UpdateStatusRequest,
+@app.post("/boards/{board_id}/members", response_model=dict[str, bool])
+async def add_member_to_board(
+    board_id: str,
+    body: AddMemberToBoardRequest,
     client: TrelloClient = Depends(get_authenticated_client),
-) -> Dict[str, bool]:
-    success = client.update_status(issue_id=issue_id, status=body.status)
-    return {"success": success}
+) -> dict[str, bool]:
+    return {"success": client.add_member_to_board(board_id=board_id, member_id=body.member_id)}
 
 
-@app.delete("/issues/{issue_id}", response_model=Dict[str, bool])
-async def delete_issue(issue_id: str, client: TrelloClient = Depends(get_authenticated_client)) -> Dict[str, bool]:
-    result = client.delete_issue(issue_id)
-    return {"success": result}
-
-
-@app.get("/issues/{issue_id}/members", response_model=List[MemberResponse])
+@app.get("/issues/{issue_id}/members", response_model=list[MemberResponse])
 async def get_issue_members(
     issue_id: str, client: TrelloClient = Depends(get_authenticated_client)
 ) -> list[MemberResponse]:
-    members = client.get_members_on_issue(issue_id)
-    return [_member_to_response(m) for m in members]
+    return [_member_to_response(m) for m in client.get_members_on_issue(issue_id)]
 
 
-@app.post("/issues/{issue_id}/assign", response_model=Dict[str, bool])
+@app.post("/issues/{issue_id}/assign", response_model=dict[str, bool])
 async def assign_issue(
     issue_id: str, body: AssignIssueRequest, client: TrelloClient = Depends(get_authenticated_client)
-) -> Dict[str, bool]:
+) -> dict[str, bool]:
     success = client.assign_issue(issue_id=issue_id, member_id=body.member_id)
     return {"success": success}
+
+
+_register_shared_api_exception_handlers()
+setup_telemetry(app)

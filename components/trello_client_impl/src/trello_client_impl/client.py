@@ -2,13 +2,27 @@
 
 Concrete implementation of the issue tracker API using the Trello REST API.
 See: https://developer.atlassian.com/cloud/trello/rest/api-group-cards/
+
+Trello lists are mapped to issue statuses internally.  Each board has
+lists whose names are matched (case-insensitive) to ``Status`` values:
+  * "To Do" / "Backlog" → ``Status.TO_DO``
+  * "In Progress" / "Doing" → ``Status.IN_PROGRESS``
+  * "Done" / "Completed" → ``Status.COMPLETED``
+
+Unknown list names default to ``Status.TO_DO`` with a one-time ``WARNING`` log
+per distinct name; see ``DESIGN.md`` (Homework 3) for operational guidance.
 """
 
-from collections.abc import Iterator
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, cast
 
 import issue_tracker_client_api
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 import requests
+from api.issue import Status
 from issue_tracker_client_api import Board, Client, Issue, List, Member
 from issue_tracker_client_api.exceptions import (
     AuthenticationError,
@@ -16,23 +30,21 @@ from issue_tracker_client_api.exceptions import (
     ResourceNotFoundError,
     ServiceUnavailableError,
 )
-from requests_oauthlib import OAuth1, OAuth1Session  # type: ignore[import-untyped]
+from requests_oauthlib import OAuth1, OAuth1Session
 
 from .board import TrelloBoard, _is_trello_board_response
-from .issue import TrelloCard, _is_trello_card_response
+from .issue import TrelloCard, _infer_status, _is_trello_card_response
 from .list import TrelloList, _is_trello_list_response
 from .member import TrelloMember, _is_trello_member_response
 
 BASE_URL = "https://api.trello.com/1"
-OAUTH_BASE_URL = "https://trello.com/1"  # OAuth endpoints have separate base URL
+OAUTH_BASE_URL = "https://trello.com/1"
 
 
 class TrelloClient(Client):
-    """Implementation of the issue tracker Client.
+    """Implementation of the issue tracker Client for Trello.
 
     Credentials are injected via constructor to remain provider-agnostic.
-    The consumer application is responsible for loading credentials from
-    any source (environment, file, vault, etc.).
     """
 
     def __init__(
@@ -40,28 +52,22 @@ class TrelloClient(Client):
         *,
         api_key: str,
         secret: str | None = None,
-        token: str | None = None,  # Deprecated, use access_token
+        token: str | None = None,
         access_token: str | None = None,
         access_token_secret: str | None = None,
         request_token_secret: str | None = None,
-        board_id: str | None = None,
-        status_list_ids: dict[str, str] | None = None,
         interactive: bool = False,
     ) -> None:
         """Initialize TrelloClient with injected credentials.
 
         Args:
-            api_key: Trello API key
-            secret: Trello API secret (for OAuth)
-            token: Deprecated, use access_token
-            access_token: OAuth access token
-            access_token_secret: OAuth access token secret
-            board_id: Optional default board ID
-            status_list_ids: Optional mapping of status name to list ID for
-                update_status (e.g. {"todo": "id1", "in_progress": "id2", "complete": "id3"}).
-                When set, update_status moves the issue to the list for that status.
+            api_key: Trello API key.
+            secret: Trello API secret (for OAuth).
+            token: Deprecated, use access_token.
+            access_token: OAuth access token.
+            access_token_secret: OAuth access token secret.
             request_token_secret: OAuth request token secret (for OAuth flow).
-            interactive: Whether to enable interactive mode
+            interactive: Whether to enable interactive mode.
 
         """
         if not api_key:
@@ -72,21 +78,41 @@ class TrelloClient(Client):
         self.secret = secret
         self._access_token = access_token or token
         self._access_token_secret = access_token_secret
-        self._default_board_id = board_id
-        self._status_list_ids = status_list_ids or {}
         self.interactive = interactive
-        # state var for OAuth flow
         self._request_token_secret = request_token_secret
         self._request_token: str | None = None
 
-        self._oauth = None
-        if self._access_token and self._access_token_secret and secret:
-            self._oauth = OAuth1(
-                api_key, secret, self._access_token, self._access_token_secret
+        # Fail fast when callers try OAuth1 auth with partial credentials.
+        # (`token` without OAuth1 signing is still supported for key+token query auth.)
+        oauth_parts = (self.secret, access_token, self._access_token_secret)
+        if (access_token or self._access_token_secret) and not all(oauth_parts):
+            raise ValueError(
+                "Trello OAuth requires api_key, secret, access_token, and access_token_secret"
             )
-        elif self._access_token and not self._access_token_secret:
-            # Old way, no OAuth
-            pass
+
+        self._oauth: OAuth1 | None = None
+        if all(oauth_parts):
+            secret = self.secret
+            access_token_value = self._access_token
+            access_token_secret_value = self._access_token_secret
+            if (
+                secret is None
+                or access_token_value is None
+                or access_token_secret_value is None
+            ):
+                raise ValueError(
+                    "Trello OAuth requires api_key, secret, access_token, and access_token_secret"
+                )
+            self._oauth = OAuth1(
+                api_key,
+                secret,
+                access_token_value,
+                access_token_secret_value,
+            )
+
+    # ------------------------------------------------------------------ #
+    # OAuth helpers
+    # ------------------------------------------------------------------ #
 
     def get_authorization_url(self, callback_url: str | None = None) -> str:
         if not self.secret:
@@ -142,6 +168,10 @@ class TrelloClient(Client):
     def token(self) -> str | None:
         return self._access_token
 
+    # ------------------------------------------------------------------ #
+    # Low-level HTTP
+    # ------------------------------------------------------------------ #
+
     def _query(self, **kwargs: str) -> dict[str, str]:
         if self._oauth:
             return kwargs
@@ -194,24 +224,40 @@ class TrelloClient(Client):
             ) from exc
         return resp.json() if resp.content else None
 
-    def get_issue(self, issue_id: str) -> Issue:
-        data = self._request("GET", f"/cards/{issue_id}")
-        if not _is_trello_card_response(data):
-            raise TypeError("Expected card response with id from cards API")
-        return TrelloCard.from_api(data)
+    # ------------------------------------------------------------------ #
+    # Internal: list ↔ status helpers
+    # ------------------------------------------------------------------ #
 
-    def delete_issue(self, issue_id: str) -> bool:
-        self._request("PUT", f"/cards/{issue_id}", json_payload={"closed": True})
-        self._request("DELETE", f"/cards/{issue_id}")
-        return True
+    def _get_lists_raw(self, board_id: str) -> list[dict[str, Any]]:
+        """Return raw list dicts for a board."""
+        data = self._request("GET", f"/boards/{board_id}/lists")
+        if not isinstance(data, list):
+            return []
+        return cast("list[dict[str, Any]]", data)
 
-    def update_status(self, issue_id: str, status: str) -> bool:
-        list_id = self._status_list_ids.get(status)
-        if list_id is not None:
-            payload: dict[str, Any] = {"idList": list_id}
-            # Future: when status == "complete" (done list), set dueComplete=True so is_complete is true
-            self._request("PUT", f"/cards/{issue_id}", json_payload=payload)
-        return True
+    def _list_id_for_status(self, board_id: str, status: Status) -> str:
+        """Find the Trello list ID that corresponds to a Status value."""
+        lists = self._get_lists_raw(board_id)
+        for lst in lists:
+            name = lst.get("name", "")
+            if _infer_status(name) == status:
+                return str(lst["id"])
+        if lists:
+            return str(lists[0]["id"])
+        raise IssueTrackerError(
+            f"Board {board_id} has no lists — cannot map status {status.value}"
+        )
+
+    def _list_name_by_id(self, list_id: str) -> str:
+        """Return the name of a list by its ID."""
+        data = self._request("GET", f"/lists/{list_id}")
+        if isinstance(data, dict):
+            return str(data.get("name", ""))
+        return ""
+
+    # ------------------------------------------------------------------ #
+    # Board operations  (shared API)
+    # ------------------------------------------------------------------ #
 
     def get_board(self, board_id: str) -> Board:
         data = self._request("GET", f"/boards/{board_id}")
@@ -228,33 +274,119 @@ class TrelloClient(Client):
                 yield TrelloBoard.from_api(board)
 
     def create_board(self, name: str) -> Board:
-        """Create a board (POST /boards)."""
         data = self._request("POST", "/boards", params={"name": name})
         if not _is_trello_board_response(data):
             raise TypeError("Expected board response with id from boards API")
         return TrelloBoard.from_api(data)
 
-    def add_member_to_board(self, board_id: str, member_id: str) -> bool:
-        """Add a member to the board (PUT /boards/{id}/members/{idMember})."""
-        self._request(
-            "PUT",
-            f"/boards/{board_id}/members/{member_id}",
-            params={"type": "normal"},
-        )
+    def update_board(
+        self,
+        board_id: str,
+        name: str | None = None,
+    ) -> Board:
+        payload: dict[str, Any] = {}
+        if name is not None:
+            payload["name"] = name
+        data = self._request("PUT", f"/boards/{board_id}", json_payload=payload)
+        if not _is_trello_board_response(data):
+            raise TypeError("Expected board response with id from boards API")
+        return TrelloBoard.from_api(data)
+
+    def delete_board(self, board_id: str) -> bool:
+        self._request("DELETE", f"/boards/{board_id}")
         return True
 
-    def get_issues_in_list(
-        self, list_id: str, max_issues: int = 100
-    ) -> Iterator[Issue]:
-        """Return issues in the list (GET /lists/{id}/cards)."""
-        data = self._request("GET", f"/lists/{list_id}/cards")
-        if not isinstance(data, list):
-            return
-        for count, issue in enumerate(data):
-            if count >= max_issues:
-                break
-            if _is_trello_card_response(issue):
-                yield TrelloCard.from_api(issue)
+    # ------------------------------------------------------------------ #
+    # Issue operations  (shared API)
+    # ------------------------------------------------------------------ #
+
+    def get_issue(self, issue_id: str) -> Issue:
+        data = self._request("GET", f"/cards/{issue_id}")
+        if not _is_trello_card_response(data):
+            raise TypeError("Expected card response with id from cards API")
+        list_id = data.get("idList", "")
+        list_name = self._list_name_by_id(str(list_id)) if list_id else ""
+        return TrelloCard.from_api(data, list_name=list_name)
+
+    def get_issues(self, board_id: str) -> Iterator[Issue]:
+        lists = self._get_lists_raw(board_id)
+        for lst in lists:
+            list_name = lst.get("name", "")
+            cards_data = self._request("GET", f"/lists/{lst['id']}/cards")
+            if not isinstance(cards_data, list):
+                continue
+            for card in cards_data:
+                if _is_trello_card_response(card):
+                    yield TrelloCard.from_api(card, list_name=list_name)
+
+    def create_issue(
+        self,
+        title: str,
+        board_id: str,
+        desc: str | None = None,
+        members: list[str] | None = None,
+        due_date: str | None = None,
+        status: Status = Status.TO_DO,
+    ) -> Issue:
+        list_id = self._list_id_for_status(board_id, status)
+        params: dict[str, str] = {"name": title, "idList": list_id}
+        if desc is not None:
+            params["desc"] = desc
+        if members:
+            params["idMembers"] = ",".join(members)
+        if due_date is not None:
+            params["due"] = due_date
+        data = self._request("POST", "/cards", params=params)
+        if not _is_trello_card_response(data):
+            raise TypeError("Expected card response with id from cards API")
+        list_name = self._list_name_by_id(list_id)
+        return TrelloCard.from_api(data, list_name=list_name)
+
+    def update_issue(
+        self,
+        issue_id: str,
+        title: str | None = None,
+        desc: str | None = None,
+        members: list[str] | None = None,
+        due_date: str | None = None,
+        status: Status | None = None,
+        board_id: str | None = None,
+    ) -> Issue:
+        payload: dict[str, Any] = {}
+        if title is not None:
+            payload["name"] = title
+        if desc is not None:
+            payload["desc"] = desc
+        if members is not None:
+            payload["idMembers"] = members
+        if due_date is not None:
+            payload["due"] = due_date
+        if status is not None and board_id is not None:
+            list_id = self._list_id_for_status(board_id, status)
+            payload["idList"] = list_id
+        elif status is not None:
+            card_data = self._request("GET", f"/cards/{issue_id}")
+            if isinstance(card_data, dict):
+                bid = str(card_data.get("idBoard", ""))
+                if bid:
+                    list_id = self._list_id_for_status(bid, status)
+                    payload["idList"] = list_id
+
+        data = self._request("PUT", f"/cards/{issue_id}", json_payload=payload)
+        if not _is_trello_card_response(data):
+            raise TypeError("Expected card response with id from cards API")
+        list_id_val = data.get("idList", "")
+        list_name = self._list_name_by_id(str(list_id_val)) if list_id_val else ""
+        return TrelloCard.from_api(data, list_name=list_name)
+
+    def delete_issue(self, issue_id: str) -> bool:
+        self._request("PUT", f"/cards/{issue_id}", json_payload={"closed": True})
+        self._request("DELETE", f"/cards/{issue_id}")
+        return True
+
+    # ------------------------------------------------------------------ #
+    # Internal List operations
+    # ------------------------------------------------------------------ #
 
     def get_list(self, list_id: str) -> List:
         data = self._request("GET", f"/lists/{list_id}")
@@ -269,6 +401,21 @@ class TrelloClient(Client):
         for list_obj in data:
             if _is_trello_list_response(list_obj):
                 yield TrelloList.from_api(list_obj)
+
+    def get_issues_in_list(
+        self, list_id: str, max_issues: int = 100
+    ) -> Iterator[Issue]:
+        data = self._request("GET", f"/lists/{list_id}/cards")
+        if not isinstance(data, list):
+            return
+        list_name = self._list_name_by_id(list_id)
+        count = 0
+        for issue in data:
+            if count >= max_issues:
+                break
+            if _is_trello_card_response(issue):
+                yield TrelloCard.from_api(issue, list_name=list_name)
+                count += 1
 
     def create_list(self, board_id: str, name: str) -> List:
         data = self._request(
@@ -295,6 +442,18 @@ class TrelloClient(Client):
         self._request("PUT", f"/lists/{list_id}", json_payload={"closed": True})
         return True
 
+    # ------------------------------------------------------------------ #
+    # Internal Member operations
+    # ------------------------------------------------------------------ #
+
+    def add_member_to_board(self, board_id: str, member_id: str) -> bool:
+        self._request(
+            "PUT",
+            f"/boards/{board_id}/members/{member_id}",
+            json_payload={"type": "normal"},
+        )
+        return True
+
     def get_members_on_issue(self, issue_id: str) -> list[Member]:
         data = self._request("GET", f"/cards/{issue_id}/members")
         if not isinstance(data, list):
@@ -309,26 +468,9 @@ class TrelloClient(Client):
         )
         return True
 
-    def create_issue(
-        self,
-        title: str,
-        list_id: str,
-        *,
-        description: str | None = None,
-    ) -> Issue:
-        params: dict[str, str] = {"name": title, "idList": list_id}
-        if description is not None:
-            params["desc"] = description
-        data = self._request("POST", "/cards", params=params)
-        if not _is_trello_card_response(data):
-            raise TypeError("Expected card response with id from cards API")
-        return TrelloCard.from_api(data)
-
 
 def get_client_impl(**kwargs: Any) -> Client:  # noqa: ANN401
     """Return an instance of the Trello client.
-
-    Extracts Trello-specific credentials from generic kwargs provided by consumer.
 
     Args:
         **kwargs: Configuration dictionary. Must contain:
@@ -336,8 +478,6 @@ def get_client_impl(**kwargs: Any) -> Client:  # noqa: ANN401
             - token: Trello token
             - secret: Trello API secret (for OAuth)
             - request_token_secret: Trello request token secret (for OAuth)
-            - board_id (optional): Default board ID
-            - status_list_ids (optional): Map status name -> list ID for update_status
             - interactive (optional): Whether to enable interactive mode
 
     Returns:
@@ -366,17 +506,10 @@ def get_client_impl(**kwargs: Any) -> Client:  # noqa: ANN401
         token=token,
         secret=secret,
         request_token_secret=request_token_secret,
-        board_id=kwargs.get("board_id"),
-        status_list_ids=kwargs.get("status_list_ids"),
         interactive=kwargs.get("interactive", False),
     )
 
 
 def register() -> None:
-    """Register the Trello client factory with the issue tracker client API.
-
-    This allows consumers to use:
-        from issue_tracker_client_api import get_client
-        client = get_client(api_key="...", token="...", board_id="...", ...)
-    """
+    """Register the Trello client factory with the issue tracker client API."""
     issue_tracker_client_api.get_client = get_client_impl

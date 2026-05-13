@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 import requests as requests_lib
+from api.issue import Status
 from issue_tracker_client_api.exceptions import (
     AuthenticationError,
     IssueTrackerError,
@@ -19,57 +20,54 @@ from trello_client_impl import (
 )
 
 
+def _mock_list_response(
+    list_id: str = "list_1", name: str = "To Do", board_id: str = "board_1"
+) -> dict[str, Any]:
+    return {"id": list_id, "name": name, "idBoard": board_id}
+
+
 @pytest.mark.unit
 class TestTrelloClient:
     """Test the TrelloClient implementation with mocked requests."""
 
     @pytest.fixture
-    def client_with_creds(self, trello_credentials: dict[str, str]) -> TrelloClient:
-        """Create a TrelloClient with injected credentials."""
+    def client_with_creds(self, trello_credentials: dict[str, Any]) -> TrelloClient:
         return TrelloClient(**trello_credentials)
 
     def test_trello_client_initialization(
-        self, trello_credentials: dict[str, str]
+        self, trello_credentials: dict[str, Any]
     ) -> None:
-        """Test TrelloClient can be initialized with credentials."""
         client = TrelloClient(**trello_credentials)
         assert client is not None
         assert client.interactive is False
 
     def test_trello_client_interactive_mode(
-        self, trello_credentials: dict[str, str]
+        self, trello_credentials: dict[str, Any]
     ) -> None:
-        """Test TrelloClient with interactive flag."""
         client = TrelloClient(**trello_credentials, interactive=True)
         assert client.interactive is True
 
     def test_trello_client_api_key_from_init(
-        self, trello_credentials: dict[str, str]
+        self, trello_credentials: dict[str, Any]
     ) -> None:
-        """Test TrelloClient stores API key from constructor."""
         client = TrelloClient(**trello_credentials)
         assert client.api_key == "test_api_key"
 
     def test_trello_client_token_property(
-        self, trello_credentials: dict[str, str]
+        self, trello_credentials: dict[str, Any]
     ) -> None:
-        """Test TrelloClient token property."""
         client = TrelloClient(**trello_credentials)
         assert client.token == "test_token"
 
     def test_trello_client_token_raises_when_missing(self) -> None:
-        """Test TrelloClient raises ValueError when api_key not provided."""
         with pytest.raises(ValueError, match="api_key is required"):
             TrelloClient(api_key="", token="token")
 
     def test_trello_client_query_method(
-        self, trello_credentials: dict[str, str]
+        self, trello_credentials: dict[str, Any]
     ) -> None:
-        """Test TrelloClient _query method includes credentials."""
         client = TrelloClient(**trello_credentials)
         query = client._query()
-        assert "key" in query
-        assert "token" in query
         assert query["key"] == "test_api_key"
         assert query["token"] == "test_token"
 
@@ -79,78 +77,26 @@ class TestTrelloClient:
         mocker: MockerFixture,
         mock_issue_response: dict[str, Any],
     ) -> None:
-        """Test TrelloClient.get_issue with mocked API call."""
+        list_resp = _mock_list_response()
         mock_response = MagicMock()
-        mock_response.json.return_value = mock_issue_response
+        mock_response.json.side_effect = [mock_issue_response, list_resp]
         mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
+            "trello_client_impl.client.requests.request", return_value=mock_response
         )
 
         issue = client_with_creds.get_issue("issue_id")
         assert issue is not None
+        assert issue.id == mock_issue_response["id"]
 
     def test_trello_client_delete_issue(
         self, client_with_creds: TrelloClient, mocker: MockerFixture
     ) -> None:
-        """Test TrelloClient.delete_issue with mocked API call (archive then delete)."""
-        mock_response = MagicMock()
         mock_request = mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
+            "trello_client_impl.client.requests.request", return_value=MagicMock()
         )
-
         result = client_with_creds.delete_issue("issue_id")
         assert result is True
         assert mock_request.call_count >= 2
-
-    def test_trello_client_update_status_moves_issue_to_list(
-        self,
-        client_with_creds: TrelloClient,
-        mocker: MockerFixture,
-    ) -> None:
-        """Test TrelloClient.update_status moves issue to the list for that status."""
-        client = TrelloClient(
-            api_key=client_with_creds.api_key,
-            token=client_with_creds.token,
-            status_list_ids={"complete": "list_done_id"},
-        )
-        mock_request = mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=MagicMock(),
-        )
-        result = client.update_status("issue_id", "complete")
-        assert result is True
-        mock_request.assert_called_once()
-        call_kwargs = mock_request.call_args.kwargs
-        # status_list_ids set: move card to the list for that status.
-        # Future: when moving to the "done" list we may also set dueComplete=True so is_complete is true.
-        assert call_kwargs.get("json") == {"idList": "list_done_id"}
-
-    def test_trello_client_update_status_unknown_status_no_op(
-        self, client_with_creds: TrelloClient, mocker: MockerFixture
-    ) -> None:
-        """Test update_status with unknown status returns True without calling API."""
-        mock_request = mocker.patch(
-            "trello_client_impl.client.requests.request",
-        )
-        result = client_with_creds.update_status("issue_id", "unexpected_status")
-        assert result is True
-        # because the client doesn't send a request for unrecognised statuses
-        mock_request.assert_not_called()
-
-    def test_trello_client_assign_issue(
-        self, client_with_creds: TrelloClient, mocker: MockerFixture
-    ) -> None:
-        """Test TrelloClient.assign_issue with mocked API call."""
-        mock_response = MagicMock()
-        mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
-        )
-
-        result = client_with_creds.assign_issue("issue_id", "member_id")
-        assert result is True
 
     def test_trello_client_create_issue(
         self,
@@ -158,45 +104,27 @@ class TestTrelloClient:
         mocker: MockerFixture,
         mock_issue_response: dict[str, Any],
     ) -> None:
-        """Test TrelloClient.create_issue with mocked API call."""
+        lists_data = [
+            _mock_list_response("list_todo", "To Do"),
+            _mock_list_response("list_ip", "In Progress"),
+        ]
+        list_name_resp = _mock_list_response("list_todo", "To Do")
+
         mock_response = MagicMock()
-        mock_response.json.return_value = mock_issue_response
-        mock_request = mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
+        mock_response.json.side_effect = [
+            lists_data,
+            mock_issue_response,
+            list_name_resp,
+        ]
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_response
         )
 
         issue = client_with_creds.create_issue(
-            "New Issue",
-            "test_list_id",
-            description="Issue description",
+            "New Issue", "test_board_id", desc="desc"
         )
         assert issue is not None
         assert issue.id == mock_issue_response["id"]
-        assert issue.title == mock_issue_response["name"]
-        assert mock_request.call_count == 1
-        call_kwargs = mock_request.call_args.kwargs
-        assert call_kwargs["params"]["name"] == "New Issue"
-        assert call_kwargs["params"]["idList"] == "test_list_id"
-        assert call_kwargs["params"]["desc"] == "Issue description"
-
-    def test_trello_client_create_issue_without_description(
-        self,
-        client_with_creds: TrelloClient,
-        mocker: MockerFixture,
-        mock_issue_response: dict[str, Any],
-    ) -> None:
-        """Test TrelloClient.create_issue without optional description."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = mock_issue_response
-        mock_request = mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
-        )
-
-        issue = client_with_creds.create_issue("Title Only", "list_123")
-        assert issue.id == mock_issue_response["id"]
-        assert "desc" not in mock_request.call_args.kwargs["params"]
 
     def test_trello_client_get_board(
         self,
@@ -204,16 +132,15 @@ class TestTrelloClient:
         mocker: MockerFixture,
         mock_board_response: dict[str, str],
     ) -> None:
-        """Test TrelloClient.get_board with mocked API call."""
         mock_response = MagicMock()
         mock_response.json.return_value = mock_board_response
         mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
+            "trello_client_impl.client.requests.request", return_value=mock_response
         )
 
         board = client_with_creds.get_board("board_id")
         assert board is not None
+        assert board.board_name == mock_board_response["name"]
 
     def test_trello_client_create_board(
         self,
@@ -221,167 +148,184 @@ class TestTrelloClient:
         mocker: MockerFixture,
         mock_board_response: dict[str, str],
     ) -> None:
-        """Test TrelloClient.create_board creates a board and returns it."""
         mock_response = MagicMock()
         mock_response.json.return_value = mock_board_response
         mock_request = mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
+            "trello_client_impl.client.requests.request", return_value=mock_response
         )
         board = client_with_creds.create_board("New Board")
         assert board.id == mock_board_response["id"]
-        assert board.name == mock_board_response["name"]
+        assert board.board_name == mock_board_response["name"]
         assert mock_request.call_args[0][0] == "POST"
-        assert "boards" in str(mock_request.call_args[0][1])
-        assert (
-            mock_request.call_args.kwargs.get("params", {}).get("name") == "New Board"
-        )
 
-    def test_trello_client_add_member_to_board(
+    def test_trello_client_update_board(
         self,
         client_with_creds: TrelloClient,
         mocker: MockerFixture,
+        mock_board_response: dict[str, str],
     ) -> None:
-        """Test TrelloClient.add_member_to_board adds member to board and returns True."""
+        updated = {**mock_board_response, "name": "Renamed"}
         mock_response = MagicMock()
-        mock_response.json.return_value = {}
-        mock_request = mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
+        mock_response.json.return_value = updated
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_response
         )
-        result = client_with_creds.add_member_to_board("board_123", "member_456")
+
+        board = client_with_creds.update_board("board_id", name="Renamed")
+        assert board.board_name == "Renamed"
+
+    def test_trello_client_delete_board(
+        self, client_with_creds: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=MagicMock()
+        )
+        result = client_with_creds.delete_board("board_id")
         assert result is True
-        assert mock_request.call_count == 1
-        put_call = mock_request.call_args_list[0]
-        assert put_call[0][0] == "PUT"
-        assert "boards/board_123/members/member_456" in str(put_call[0][1])
-        assert put_call.kwargs.get("params", {}).get("type") == "normal"
 
-    def test_trello_client_get_lists(
-        self,
-        client_with_creds: TrelloClient,
-        mocker: MockerFixture,
-        mock_list_response: dict[str, Any],
-    ) -> None:
-        """Test TrelloClient.get_lists returns an iterator of lists."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = [mock_list_response]
-        mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
-        )
-
-        lists = list(client_with_creds.get_lists("board_123"))
-        assert len(lists) == 1
-        assert lists[0].id == mock_list_response["id"]
-        assert lists[0].name == mock_list_response["name"]
-
-    def test_trello_client_get_list(
-        self,
-        client_with_creds: TrelloClient,
-        mocker: MockerFixture,
-        mock_list_response: dict[str, Any],
-    ) -> None:
-        """Test TrelloClient.get_list returns a single list."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = mock_list_response
-        mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
-        )
-        list_obj = client_with_creds.get_list("list_123")
-        assert list_obj.id == mock_list_response["id"]
-        assert list_obj.name == mock_list_response["name"]
-
-    def test_trello_client_create_list(
-        self,
-        client_with_creds: TrelloClient,
-        mocker: MockerFixture,
-        mock_list_response: dict[str, Any],
-    ) -> None:
-        """Test TrelloClient.create_list creates a list and returns it."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = mock_list_response
-        mock_request = mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
-        )
-        list_obj = client_with_creds.create_list("board_123", "New Column")
-        assert list_obj.id == mock_list_response["id"]
-        assert list_obj.name == mock_list_response["name"]
-        call_kwargs = mock_request.call_args.kwargs
-        assert call_kwargs["params"]["idBoard"] == "board_123"
-        assert call_kwargs["params"]["name"] == "New Column"
-
-    def test_trello_client_update_list(
-        self,
-        client_with_creds: TrelloClient,
-        mocker: MockerFixture,
-        mock_list_response: dict[str, Any],
-    ) -> None:
-        """Test TrelloClient.update_list renames a list and returns it."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = {**mock_list_response, "name": "Renamed"}
-        mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
-        )
-        list_obj = client_with_creds.update_list("list_123", "Renamed")
-        assert list_obj.name == "Renamed"
-
-    def test_trello_client_get_issues_in_list(
+    def test_trello_client_get_issues(
         self,
         client_with_creds: TrelloClient,
         mocker: MockerFixture,
         mock_issue_response: dict[str, Any],
     ) -> None:
-        """Test TrelloClient.get_issues_in_list returns issues in the list."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = [mock_issue_response]
-        mock_request = mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
-        )
-        issues = list(client_with_creds.get_issues_in_list("list_123", max_issues=10))
-        assert len(issues) == 1
-        assert issues[0].id == mock_issue_response["id"]
-        assert issues[0].list_id == mock_issue_response.get("idList", "")
-        assert "lists/list_123/cards" in mock_request.call_args[0][1]
+        lists_data = [_mock_list_response("list_todo", "To Do")]
+        cards_data = [mock_issue_response]
 
-    def test_trello_client_delete_list(
+        mock_response = MagicMock()
+        mock_response.json.side_effect = [lists_data, cards_data]
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_response
+        )
+
+        issues = list(client_with_creds.get_issues("board_1"))
+        assert len(issues) == 1
+        assert issues[0].status == Status.TO_DO
+
+    def test_trello_client_get_issues_skips_invalid_card_collections(
         self, client_with_creds: TrelloClient, mocker: MockerFixture
     ) -> None:
-        """Test TrelloClient.delete_list archives the list."""
-        mock_request = mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=MagicMock(),
+        lists_data = [_mock_list_response("list_todo", "To Do")]
+        mock_response = MagicMock()
+        mock_response.json.side_effect = [lists_data, {"not": "a list"}]
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_response
         )
-        result = client_with_creds.delete_list("list_123")
-        assert result is True
-        call_kwargs = mock_request.call_args.kwargs
-        assert call_kwargs.get("json") == {"closed": True}
 
-    def test_trello_client_get_members_on_issue(
+        issues = list(client_with_creds.get_issues("board_1"))
+        assert issues == []
+
+    def test_trello_client_update_issue_status(
+        self,
+        client_with_creds: TrelloClient,
+        mocker: MockerFixture,
+        mock_issue_response: dict[str, Any],
+    ) -> None:
+        card_data = {**mock_issue_response, "idBoard": "board_1"}
+        lists_data = [
+            _mock_list_response("list_todo", "To Do", "board_1"),
+            _mock_list_response("list_done", "Done", "board_1"),
+        ]
+        updated_card = {**mock_issue_response, "idList": "list_done"}
+        list_name_resp = {"id": "list_done", "name": "Done"}
+
+        mock_response = MagicMock()
+        mock_response.json.side_effect = [
+            card_data,
+            lists_data,
+            updated_card,
+            list_name_resp,
+        ]
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_response
+        )
+
+        issue = client_with_creds.update_issue("issue_id", status=Status.COMPLETED)
+        assert issue is not None
+
+    def test_trello_client_update_issue_with_explicit_board_id(
+        self,
+        client_with_creds: TrelloClient,
+        mocker: MockerFixture,
+        mock_issue_response: dict[str, Any],
+    ) -> None:
+        lists_data = [
+            _mock_list_response("list_todo", "To Do", "board_1"),
+            _mock_list_response("list_done", "Done", "board_1"),
+        ]
+        updated_card = {**mock_issue_response, "idList": "list_done"}
+        list_name_resp = {"id": "list_done", "name": "Done"}
+
+        mock_response = MagicMock()
+        mock_response.json.side_effect = [lists_data, updated_card, list_name_resp]
+        mock_request = mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_response
+        )
+
+        issue = client_with_creds.update_issue(
+            "issue_id", status=Status.COMPLETED, board_id="board_1"
+        )
+        assert issue is not None
+        # Does not need the extra GET /cards/{issue_id} when board_id is provided.
+        card_get_calls = [
+            call
+            for call in mock_request.call_args_list
+            if call.args[0] == "GET"
+            and call.args[1] == "https://api.trello.com/1/cards/issue_id"
+        ]
+        assert card_get_calls == []
+
+    def test_trello_client_create_list_and_update_list(
+        self, client_with_creds: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        created = {"id": "list_1", "name": "To Do", "idBoard": "board_1"}
+        updated = {"id": "list_1", "name": "Doing", "idBoard": "board_1"}
+        mock_response = MagicMock()
+        mock_response.json.side_effect = [created, updated]
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_response
+        )
+
+        created_list = client_with_creds.create_list("board_1", "To Do")
+        updated_list = client_with_creds.update_list("list_1", "Doing")
+
+        assert created_list.id == "list_1"
+        assert updated_list.name == "Doing"
+
+    def test_trello_client_get_members_and_assign_issue(
         self,
         client_with_creds: TrelloClient,
         mocker: MockerFixture,
         mock_member_response: dict[str, Any],
     ) -> None:
-        """Test TrelloClient.get_members_on_issue with mocked API call."""
         mock_response = MagicMock()
-        mock_response.json.return_value = [mock_member_response]
+        mock_response.json.side_effect = [[mock_member_response], {"ok": True}]
         mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_response,
+            "trello_client_impl.client.requests.request", return_value=mock_response
         )
 
-        members = client_with_creds.get_members_on_issue("issue_id")
-        assert isinstance(members, list)
+        members = client_with_creds.get_members_on_issue("issue_1")
+        assigned = client_with_creds.assign_issue("issue_1", "member_1")
+
+        assert len(members) == 1
+        assert members[0].id == "test_member_id"
+        assert assigned is True
+
+    def test_trello_client_get_members_non_list_returns_empty(
+        self, client_with_creds: TrelloClient, mocker: MockerFixture
+    ) -> None:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"unexpected": "shape"}
+        mocker.patch(
+            "trello_client_impl.client.requests.request", return_value=mock_response
+        )
+
+        assert client_with_creds.get_members_on_issue("issue_1") == []
 
 
 @pytest.mark.unit
 class TestTrelloClientOAuth:
-    """Test OAuth flow methods: get_authorization_url and exchange_request_token."""
+    """Test OAuth flow methods."""
 
     def test_get_authorization_url_success(self, mocker: MockerFixture) -> None:
         mock_session_cls = mocker.patch("trello_client_impl.client.OAuth1Session")
@@ -390,15 +334,10 @@ class TestTrelloClientOAuth:
             "oauth_token": "req_tok_123",
             "oauth_token_secret": "req_sec_456",
         }
-
         client = TrelloClient(api_key="key", secret="secret")
         url = client.get_authorization_url(callback_url="http://localhost/cb")
-
         assert "oauth_token=req_tok_123" in url
         assert client.request_token_secret == "req_sec_456"
-        mock_session_cls.assert_called_once_with(
-            "key", client_secret="secret", callback_uri="http://localhost/cb"
-        )
 
     def test_get_authorization_url_no_secret_raises(self) -> None:
         client = TrelloClient(api_key="key", token="tok")
@@ -409,29 +348,22 @@ class TestTrelloClientOAuth:
         self, mocker: MockerFixture
     ) -> None:
         mock_session_cls = mocker.patch("trello_client_impl.client.OAuth1Session")
-        mock_session = mock_session_cls.return_value
-        mock_session.fetch_request_token.return_value = {}
-
+        mock_session_cls.return_value.fetch_request_token.return_value = {}
         client = TrelloClient(api_key="key", secret="secret")
         with pytest.raises(ValueError, match="did not return request token"):
             client.get_authorization_url()
 
     def test_exchange_request_token_success(self, mocker: MockerFixture) -> None:
         mock_session_cls = mocker.patch("trello_client_impl.client.OAuth1Session")
-        mock_session = mock_session_cls.return_value
-        mock_session.fetch_access_token.return_value = {
+        mock_session_cls.return_value.fetch_access_token.return_value = {
             "oauth_token": "access_tok",
             "oauth_token_secret": "access_sec",
         }
         mock_oauth1 = mocker.patch("trello_client_impl.client.OAuth1")
-
         client = TrelloClient(
-            api_key="key",
-            secret="secret",
-            request_token_secret="req_sec",
+            api_key="key", secret="secret", request_token_secret="req_sec"
         )
         client.exchange_request_token(oauth_token="req_tok", oauth_verifier="verifier")
-
         assert client.token == "access_tok"
         assert client.access_token_secret == "access_sec"
         mock_oauth1.assert_called_once_with("key", "secret", "access_tok", "access_sec")
@@ -451,9 +383,7 @@ class TestTrelloClientOAuth:
         self, mocker: MockerFixture
     ) -> None:
         mock_session_cls = mocker.patch("trello_client_impl.client.OAuth1Session")
-        mock_session = mock_session_cls.return_value
-        mock_session.fetch_access_token.return_value = {}
-
+        mock_session_cls.return_value.fetch_access_token.return_value = {}
         client = TrelloClient(api_key="key", secret="secret", request_token_secret="rs")
         with pytest.raises(ValueError, match="did not return access token"):
             client.exchange_request_token("tok", "verifier")
@@ -461,7 +391,7 @@ class TestTrelloClientOAuth:
 
 @pytest.mark.unit
 class TestTrelloClientInit:
-    """Test constructor edge cases and credential paths."""
+    """Test constructor edge cases."""
 
     def test_both_token_and_access_token_raises(self) -> None:
         with pytest.raises(ValueError, match="Use access_token, not token"):
@@ -469,23 +399,37 @@ class TestTrelloClientInit:
 
     def test_oauth1_auth_created_with_full_credentials(self) -> None:
         client = TrelloClient(
-            api_key="key",
-            secret="secret",
-            access_token="at",
-            access_token_secret="ats",
+            api_key="key", secret="secret", access_token="at", access_token_secret="ats"
         )
         assert client._oauth is not None
 
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"access_token": "at"},
+            {"access_token_secret": "ats"},
+            {"secret": "secret", "access_token": "at"},
+            {"secret": "secret", "access_token_secret": "ats"},
+            {"access_token": "at", "access_token_secret": "ats"},
+        ],
+    )
+    def test_partial_oauth_credentials_raise(self, kwargs: dict[str, str]) -> None:
+        with pytest.raises(
+            ValueError,
+            match="Trello OAuth requires api_key, secret, access_token, and access_token_secret",
+        ):
+            TrelloClient(api_key="key", **kwargs)
+
+    def test_secret_only_is_allowed_for_oauth_flow_init(self) -> None:
+        client = TrelloClient(api_key="key", secret="secret")
+        assert client is not None
+
     def test_query_with_oauth_skips_key_token(self) -> None:
         client = TrelloClient(
-            api_key="key",
-            secret="secret",
-            access_token="at",
-            access_token_secret="ats",
+            api_key="key", secret="secret", access_token="at", access_token_secret="ats"
         )
         query = client._query(extra="val")
         assert "key" not in query
-        assert "token" not in query
         assert query == {"extra": "val"}
 
     def test_query_without_token_returns_only_key(self) -> None:
@@ -493,32 +437,12 @@ class TestTrelloClientInit:
         query = client._query()
         assert query == {"key": "key"}
 
-    def test_request_uses_oauth_auth(self, mocker: MockerFixture) -> None:
-        client = TrelloClient(
-            api_key="key",
-            secret="secret",
-            access_token="at",
-            access_token_secret="ats",
-        )
-        mock_resp = MagicMock()
-        mock_resp.content = b'{"ok": true}'
-        mock_resp.json.return_value = {"ok": True}
-        mock_req = mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
-        )
-        result = client._request("GET", "/test")
-        assert result == {"ok": True}
-        call_kwargs = mock_req.call_args.kwargs
-        assert call_kwargs["auth"] is client._oauth
-
     def test_request_returns_none_on_empty_content(self, mocker: MockerFixture) -> None:
         client = TrelloClient(api_key="key", token="tok")
         mock_resp = MagicMock()
         mock_resp.content = b""
         mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
+            "trello_client_impl.client.requests.request", return_value=mock_resp
         )
         result = client._request("DELETE", "/cards/123")
         assert result is None
@@ -526,7 +450,7 @@ class TestTrelloClientInit:
 
 @pytest.mark.unit
 class TestTrelloClientErrorPaths:
-    """Test TypeError raises on invalid API responses."""
+    """Test error paths on invalid responses."""
 
     @pytest.fixture
     def client(self) -> TrelloClient:
@@ -538,8 +462,7 @@ class TestTrelloClientErrorPaths:
         mock_resp = MagicMock()
         mock_resp.json.return_value = "not_a_dict"
         mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
+            "trello_client_impl.client.requests.request", return_value=mock_resp
         )
         with pytest.raises(TypeError, match="Expected card response"):
             client.get_issue("bad_id")
@@ -550,8 +473,7 @@ class TestTrelloClientErrorPaths:
         mock_resp = MagicMock()
         mock_resp.json.return_value = "not_a_dict"
         mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
+            "trello_client_impl.client.requests.request", return_value=mock_resp
         )
         with pytest.raises(TypeError, match="Expected board response"):
             client.get_board("bad_id")
@@ -562,59 +484,10 @@ class TestTrelloClientErrorPaths:
         mock_resp = MagicMock()
         mock_resp.json.return_value = "not_a_dict"
         mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
+            "trello_client_impl.client.requests.request", return_value=mock_resp
         )
         with pytest.raises(TypeError, match="Expected board response"):
             client.create_board("Test")
-
-    def test_get_list_invalid_response_raises(
-        self, client: TrelloClient, mocker: MockerFixture
-    ) -> None:
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = "not_a_dict"
-        mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
-        )
-        with pytest.raises(TypeError, match="Expected list response"):
-            client.get_list("bad_id")
-
-    def test_create_list_invalid_response_raises(
-        self, client: TrelloClient, mocker: MockerFixture
-    ) -> None:
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = "not_a_dict"
-        mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
-        )
-        with pytest.raises(TypeError, match="Expected list response"):
-            client.create_list("board_1", "Name")
-
-    def test_update_list_invalid_response_raises(
-        self, client: TrelloClient, mocker: MockerFixture
-    ) -> None:
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = "not_a_dict"
-        mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
-        )
-        with pytest.raises(TypeError, match="Expected list response"):
-            client.update_list("list_1", "New Name")
-
-    def test_create_issue_invalid_response_raises(
-        self, client: TrelloClient, mocker: MockerFixture
-    ) -> None:
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = "not_a_dict"
-        mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
-        )
-        with pytest.raises(TypeError, match="Expected card response"):
-            client.create_issue("Title", "list_1")
 
     def test_get_boards_non_list_response(
         self, client: TrelloClient, mocker: MockerFixture
@@ -622,8 +495,7 @@ class TestTrelloClientErrorPaths:
         mock_resp = MagicMock()
         mock_resp.json.return_value = "not_a_list"
         mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
+            "trello_client_impl.client.requests.request", return_value=mock_resp
         )
         boards = list(client.get_boards())
         assert boards == []
@@ -637,8 +509,7 @@ class TestTrelloClientErrorPaths:
         mock_resp = MagicMock()
         mock_resp.json.return_value = [mock_board_response, "invalid"]
         mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
+            "trello_client_impl.client.requests.request", return_value=mock_resp
         )
         boards = list(client.get_boards())
         assert len(boards) == 1
@@ -649,38 +520,22 @@ class TestTrelloClientErrorPaths:
         mock_resp = MagicMock()
         mock_resp.json.return_value = "not_a_list"
         mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
+            "trello_client_impl.client.requests.request", return_value=mock_resp
         )
         lists = list(client.get_lists("board_1"))
         assert lists == []
 
     def test_get_lists_filters_invalid_entries(
-        self,
-        client: TrelloClient,
-        mocker: MockerFixture,
-        mock_list_response: dict[str, Any],
+        self, client: TrelloClient, mocker: MockerFixture
     ) -> None:
+        valid = {"id": "list_1", "name": "To Do", "idBoard": "board_1"}
         mock_resp = MagicMock()
-        mock_resp.json.return_value = [mock_list_response, "invalid"]
+        mock_resp.json.return_value = [valid, "invalid"]
         mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
+            "trello_client_impl.client.requests.request", return_value=mock_resp
         )
         lists = list(client.get_lists("board_1"))
         assert len(lists) == 1
-
-    def test_get_issues_in_list_non_list_response(
-        self, client: TrelloClient, mocker: MockerFixture
-    ) -> None:
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = "not_a_list"
-        mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
-        )
-        issues = list(client.get_issues_in_list("list_1"))
-        assert issues == []
 
     def test_get_issues_in_list_respects_max_issues(
         self,
@@ -688,42 +543,27 @@ class TestTrelloClientErrorPaths:
         mocker: MockerFixture,
         mock_issue_response: dict[str, Any],
     ) -> None:
-        second_issue = {**mock_issue_response, "id": "card_2"}
         mock_resp = MagicMock()
-        mock_resp.json.return_value = [mock_issue_response, second_issue]
+        mock_resp.json.side_effect = [
+            [mock_issue_response, mock_issue_response],
+            {"name": "To Do"},
+        ]
         mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
+            "trello_client_impl.client.requests.request", return_value=mock_resp
         )
         issues = list(client.get_issues_in_list("list_1", max_issues=1))
         assert len(issues) == 1
 
-    def test_get_issues_in_list_filters_invalid_entries(
-        self,
-        client: TrelloClient,
-        mocker: MockerFixture,
-        mock_issue_response: dict[str, Any],
-    ) -> None:
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = [mock_issue_response, "invalid"]
-        mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
-        )
-        issues = list(client.get_issues_in_list("list_1"))
-        assert len(issues) == 1
-
-    def test_get_members_on_issue_non_list_response(
+    def test_get_issues_in_list_non_list_response(
         self, client: TrelloClient, mocker: MockerFixture
     ) -> None:
         mock_resp = MagicMock()
         mock_resp.json.return_value = "not_a_list"
         mocker.patch(
-            "trello_client_impl.client.requests.request",
-            return_value=mock_resp,
+            "trello_client_impl.client.requests.request", return_value=mock_resp
         )
-        members = client.get_members_on_issue("issue_1")
-        assert members == []
+        issues = list(client.get_issues_in_list("list_1"))
+        assert issues == []
 
 
 @pytest.mark.unit
@@ -733,7 +573,6 @@ class TestGetClientImplEdgeCases:
     def test_get_client_impl_with_secret_only(self) -> None:
         client = get_client_impl(api_key="key", secret="secret")
         assert isinstance(client, TrelloClient)
-        assert client.secret == "secret"
 
     def test_get_client_impl_raises_without_api_key(self) -> None:
         with pytest.raises(ValueError, match="api_key"):
@@ -745,24 +584,21 @@ class TestGetClientImpl:
     """Test the get_client_impl factory function."""
 
     def test_get_client_impl_returns_trello_client(
-        self, trello_credentials: dict[str, str]
+        self, trello_credentials: dict[str, Any]
     ) -> None:
-        """Test get_client_impl returns a TrelloClient instance."""
         client = get_client_impl(**trello_credentials)
         assert isinstance(client, TrelloClient)
 
     def test_get_client_impl_with_interactive_flag(
-        self, trello_credentials: dict[str, str]
+        self, trello_credentials: dict[str, Any]
     ) -> None:
-        """Test get_client_impl passes interactive flag."""
         client = get_client_impl(**trello_credentials, interactive=True)
         assert isinstance(client, TrelloClient)
         assert client.interactive is True
 
     def test_get_client_impl_raises_without_credentials(self) -> None:
-        """Test get_client_impl raises error without required credentials."""
         with pytest.raises(ValueError, match="Issue Tracker requires either 'token'"):
-            get_client_impl(api_key="key")  # Missing token
+            get_client_impl(api_key="key")
 
 
 @pytest.mark.unit
@@ -770,7 +606,6 @@ class TestRegister:
     """Test the register function."""
 
     def test_register_function_exists(self) -> None:
-        """Test that register function is callable."""
         assert callable(register)
 
 

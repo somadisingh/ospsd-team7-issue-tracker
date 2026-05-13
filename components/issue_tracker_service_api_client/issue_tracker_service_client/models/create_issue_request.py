@@ -16,36 +16,65 @@ class CreateIssueRequest:
     """
     Attributes:
         title (str):
-        list_id (str):
-        description (None | str | Unset):
+        board_id (str):
+        desc (None | str | Unset):
+        members (list[str] | None | Unset):
+        due_date (None | str | Unset):
+        status (str | Unset):  Default: 'to_do'.
     """
 
     title: str
-    list_id: str
-    description: None | str | Unset = UNSET
+    board_id: str
+    desc: None | str | Unset = UNSET
+    members: list[str] | None | Unset = UNSET
+    due_date: None | str | Unset = UNSET
+    status: str | Unset = "to_do"
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         title = self.title
 
-        list_id = self.list_id
+        board_id = self.board_id
 
-        description: None | str | Unset
-        if isinstance(self.description, Unset):
-            description = UNSET
+        desc: None | str | Unset
+        if isinstance(self.desc, Unset):
+            desc = UNSET
         else:
-            description = self.description
+            desc = self.desc
+
+        members: list[str] | None | Unset
+        if isinstance(self.members, Unset):
+            members = UNSET
+        elif isinstance(self.members, list):
+            members = self.members
+
+        else:
+            members = self.members
+
+        due_date: None | str | Unset
+        if isinstance(self.due_date, Unset):
+            due_date = UNSET
+        else:
+            due_date = self.due_date
+
+        status = self.status
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
             {
                 "title": title,
-                "list_id": list_id,
+                "board_id": board_id,
             }
         )
-        if description is not UNSET:
-            field_dict["description"] = description
+        if desc is not UNSET:
+            field_dict["desc"] = desc
+        if members is not UNSET:
+            field_dict["members"] = members
+        if due_date is not UNSET:
+            field_dict["due_date"] = due_date
+        if status is not UNSET:
+            field_dict["status"] = status
 
         return field_dict
 
@@ -54,21 +83,52 @@ class CreateIssueRequest:
         d = dict(src_dict)
         title = d.pop("title")
 
-        list_id = d.pop("list_id")
+        board_id = d.pop("board_id")
 
-        def _parse_description(data: object) -> None | str | Unset:
+        def _parse_desc(data: object) -> None | str | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
                 return data
             return cast(None | str | Unset, data)
 
-        description = _parse_description(d.pop("description", UNSET))
+        desc = _parse_desc(d.pop("desc", UNSET))
+
+        def _parse_members(data: object) -> list[str] | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, list):
+                    raise TypeError()
+                members_type_0 = cast(list[str], data)
+
+                return members_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(list[str] | None | Unset, data)
+
+        members = _parse_members(d.pop("members", UNSET))
+
+        def _parse_due_date(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        due_date = _parse_due_date(d.pop("due_date", UNSET))
+
+        status = d.pop("status", UNSET)
 
         create_issue_request = cls(
             title=title,
-            list_id=list_id,
-            description=description,
+            board_id=board_id,
+            desc=desc,
+            members=members,
+            due_date=due_date,
+            status=status,
         )
 
         create_issue_request.additional_properties = d

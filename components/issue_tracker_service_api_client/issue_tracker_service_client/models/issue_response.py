@@ -17,18 +17,20 @@ class IssueResponse:
     Attributes:
         id (str):
         title (str):
-        list_id (str):
+        desc (str):
+        status (str):
         board_id (str):
-        is_complete (bool):
-        description (None | str | Unset):
+        members (list[str] | None | Unset):
+        due_date (None | str | Unset):
     """
 
     id: str
     title: str
-    list_id: str
+    desc: str
+    status: str
     board_id: str
-    is_complete: bool
-    description: None | str | Unset = UNSET
+    members: list[str] | None | Unset = UNSET
+    due_date: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -36,17 +38,26 @@ class IssueResponse:
 
         title = self.title
 
-        list_id = self.list_id
+        desc = self.desc
+
+        status = self.status
 
         board_id = self.board_id
 
-        is_complete = self.is_complete
+        members: list[str] | None | Unset
+        if isinstance(self.members, Unset):
+            members = UNSET
+        elif isinstance(self.members, list):
+            members = self.members
 
-        description: None | str | Unset
-        if isinstance(self.description, Unset):
-            description = UNSET
         else:
-            description = self.description
+            members = self.members
+
+        due_date: None | str | Unset
+        if isinstance(self.due_date, Unset):
+            due_date = UNSET
+        else:
+            due_date = self.due_date
 
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
@@ -54,13 +65,15 @@ class IssueResponse:
             {
                 "id": id,
                 "title": title,
-                "list_id": list_id,
+                "desc": desc,
+                "status": status,
                 "board_id": board_id,
-                "is_complete": is_complete,
             }
         )
-        if description is not UNSET:
-            field_dict["description"] = description
+        if members is not UNSET:
+            field_dict["members"] = members
+        if due_date is not UNSET:
+            field_dict["due_date"] = due_date
 
         return field_dict
 
@@ -71,28 +84,46 @@ class IssueResponse:
 
         title = d.pop("title")
 
-        list_id = d.pop("list_id")
+        desc = d.pop("desc")
+
+        status = d.pop("status")
 
         board_id = d.pop("board_id")
 
-        is_complete = d.pop("is_complete")
+        def _parse_members(data: object) -> list[str] | None | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            try:
+                if not isinstance(data, list):
+                    raise TypeError()
+                members_type_0 = cast(list[str], data)
 
-        def _parse_description(data: object) -> None | str | Unset:
+                return members_type_0
+            except (TypeError, ValueError, AttributeError, KeyError):
+                pass
+            return cast(list[str] | None | Unset, data)
+
+        members = _parse_members(d.pop("members", UNSET))
+
+        def _parse_due_date(data: object) -> None | str | Unset:
             if data is None:
                 return data
             if isinstance(data, Unset):
                 return data
             return cast(None | str | Unset, data)
 
-        description = _parse_description(d.pop("description", UNSET))
+        due_date = _parse_due_date(d.pop("due_date", UNSET))
 
         issue_response = cls(
             id=id,
             title=title,
-            list_id=list_id,
+            desc=desc,
+            status=status,
             board_id=board_id,
-            is_complete=is_complete,
-            description=description,
+            members=members,
+            due_date=due_date,
         )
 
         issue_response.additional_properties = d

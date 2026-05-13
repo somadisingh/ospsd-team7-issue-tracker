@@ -9,12 +9,30 @@ dependencies = [
     "issue-tracker-service",
     "issue-tracker-adapter",
     "issue-tracker-service-client",
+    "ospd-issue-tracker-api",
+    "ai-client-api",
+    "claude-ai-client-impl",
+    "openai-ai-client-impl",
+    "chat-client-api",
+    "chat-client-impl",
+    "slack-client-impl",
 ]
 
 [tool.uv.sources]
 issue-tracker-service = { workspace = true }
 issue-tracker-adapter = { workspace = true }
 issue-tracker-service-client = { workspace = true }
+ai-client-api = { workspace = true }
+claude-ai-client-impl = { workspace = true }
+openai-ai-client-impl = { workspace = true }
+ospd-issue-tracker-api = { git = "https://github.com/tatyanacthomas/ospd_issue_tracker.git", rev = "5fde7fe514b7082ae28340c27a21fd7d22c42481" }
+chat-client-impl = { workspace = true }
+chat-client-api = { git = "https://github.com/HarshithKoriRaj/Shared-API", rev = "main" }
+# Cross-vertical (HW3 §5): Team 9's published Slack ChatClient, pulled via
+# uv subdirectory pin so we install ONLY their slack_client_impl package and
+# none of their other workspace components (chat_client_service, openai_ai_client_impl,
+# ticket_client_impl, etc.).
+slack-client-impl = { git = "https://github.com/HarshithKoriRaj/CS-GY-9223-Open-Source", rev = "91eedf88e6823e1f924cbeb05c6a74aa0a524b34", subdirectory = "components/slack_client_impl" }
 
 [project.optional-dependencies]
 dev = [
@@ -32,6 +50,15 @@ dev = [
 
 [tool.uv.workspace]
 members = ["components/*"]
+
+# Force Team 9's slack-client-impl to resolve `chat-client-api` against the
+# canonical Shared-API repo, NOT against the divergent workspace copy that
+# ships in their CS-GY-9223-Open-Source repo. Without this override, uv
+# refuses to resolve because two URLs claim the same package.
+[tool.uv]
+override-dependencies = [
+    "chat-client-api @ git+https://github.com/HarshithKoriRaj/Shared-API.git@main",
+]
 
 [tool.ruff]
 line-length = 88
@@ -57,11 +84,17 @@ ignore = [
   "S106",    # Hardcoded password in function arg — same as above
   "S110",    # try/except/pass — expected pattern in exception tests
   "PLR2004", # Magic numbers — expected in test assertions
+  "N806",    # Uppercase model variables in tests (e.g. m0 vs model)
+  "PT018",   # Compound assertions in small tests
   "D100",    # Missing module docstring — test modules are self-documenting
+  "D101",    # Missing class docstring — pytest Test* class names describe intent
   "D102",    # Missing docstring in method — test names are descriptive
   "D103",    # Missing function docstring — pytest function names describe intent
   "D107",    # Missing __init__ docstring — test classes are fixtures
   "D401",    # Imperative mood — not applicable to test methods
+  "TC001",   # Typing-only first-party import — irrelevant for tests
+  "TC002",   # Typing-only third-party import — irrelevant for tests
+  "TC003",   # Typing-only stdlib import — irrelevant for tests
   "ANN001",  # Missing type annotation — pytest fixtures
   "ANN201",  # Missing return type — pytest functions
   "ANN202",  # Missing return type — pytest private methods
@@ -75,6 +108,7 @@ ignore = [
   "F841",    # Unused variable — intentional in try/except tests
   "INP001",  # Missing __init__.py — test dirs must not have it
   "PLC0415", # Import not at top of file — tests may import inside functions for isolation
+  "PLR0913", # Too many arguments — test concrete classes implement interfaces with many params
 ]
 # Trello implementation: similar to tests, but stricter for production code
 "components/trello_client_impl/src/**/*.py" = [
@@ -93,6 +127,64 @@ ignore = [
   "TRY003",  # Long exception messages — user-facing error context
   "PLR0913", # Too many arguments — adapter mirrors interface signature
 ]
+"components/ai_client_api/src/ai_client_api/resilience.py" = [
+  "D102",
+  "D107",
+  "D202",
+  "TC003",
+  "UP047",
+  "S101",
+]
+"components/ai_client_api/src/ai_client_api/signature_tools.py" = [
+  "D102",
+  "TC003",
+  "D107",
+  "D401",
+  "ANN401",
+]
+"components/ai_client_api/src/ai_client_api/structured_output.py" = [
+  "TRY003",
+]
+# OpenAI AI implementation: mirrors Claude conventions.
+"components/openai_ai_client_impl/src/**/*.py" = [
+  "D102",
+  "D107",
+  "TRY003",
+  "BLE001",
+  "PLR0913",
+  "ANN401",
+  "C901",
+  "PLC0415",
+  "TC001",
+  "TC002",
+  "TC003",
+  "PERF401",
+  "PLR0912",
+  "PLR0915",
+  "TRY300",
+]
+# Claude AI implementation: similar to trello_client_impl conventions.
+"components/claude_ai_client_impl/src/**/*.py" = [
+  "D102",    # Method docstrings redundant when interface documents them
+  "D107",    # __init__ docstrings optional for dataclasses / wiring classes
+  "TRY003",  # Long exception messages — user-facing error context
+  "BLE001",  # Blind exception catch — we intentionally wrap anything SDK raises
+  "PLR0913", # Many constructor args — DI surface intentionally explicit
+  "ANN401",  # typing.Any in tool dispatcher — tool results are provider-opaque
+  "C901",    # Tool catalogue builder is flat by design
+  "PLC0415", # Lazy imports keep the SDK optional + break circular deps
+  "TC001",   # Runtime imports used in Pydantic signatures
+  "TC002",   # Runtime imports used in Pydantic signatures
+  "TC003",   # Runtime imports used in Pydantic signatures
+  "PERF401", # Loop is clearer than comprehension for block filtering
+  "N801",    # Nested "messages" class inside FakeAnthropic mirrors SDK shape
+]
+# Chat client impl: in-memory fake + Slack adapter for Team 9
+"components/chat_client_impl/src/**/*.py" = [
+  "D102",    # Missing method docstring — implementation follows the ABC docs
+  "D107",    # Missing __init__ docstring — dataclass / wiring class
+  "TRY003",  # Long exception messages — user-facing context for chat errors
+]
 # Conftest: pytest configuration
 "conftest.py" = [
   "ANN001",  # config arg — pytest hook parameter
@@ -103,10 +195,51 @@ ignore = [
 [tool.mypy]
 strict = true
 explicit_package_bases = true  # Required for src layout
-mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src", "components/issue_tracker_service/src", "components/issue_tracker_adapter/src", "components/issue_tracker_service_api_client"]
+mypy_path = ["components/issue_tracker_client_api/src", "components/trello_client_impl/src", "components/issue_tracker_service/src", "components/issue_tracker_adapter/src", "components/issue_tracker_service_api_client", "components/ai_client_api/src", "components/claude_ai_client_impl/src", "components/openai_ai_client_impl/src", "components/chat_client_impl/src"]
 ignore_missing_imports = false
-warn_unused_ignores = false
+warn_unused_ignores = true
 show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = "api.*"
+ignore_missing_imports = true
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = "requests_oauthlib.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "requests.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "anthropic.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "openai.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "chat_client_api.*"
+ignore_missing_imports = true
+follow_imports = "skip"
+disable_error_code = ["import-untyped"]
+
+# Team 9's slack_client_impl is external code (HW3 rubric §2 explicitly
+# allows excluding other teams' code from type checks). Their workspace ABC
+# diverges slightly from the Shared-API we pin (timestamp: str vs datetime),
+# so following its imports would surface false errors on our side.
+[[tool.mypy.overrides]]
+module = "slack_client_impl.*"
+ignore_missing_imports = true
+follow_imports = "skip"
+disable_error_code = ["import-untyped"]
+
+[[tool.mypy.overrides]]
+module = "slack_sdk.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 pythonpath = [
@@ -115,7 +248,11 @@ pythonpath = [
     "components/trello_client_impl/src",
     "components/issue_tracker_adapter/src",
     "components/issue_tracker_service/src",
+    "components/chat_client_impl/src",
     "components/issue_tracker_service_api_client",
+    "components/ai_client_api/src",
+    "components/claude_ai_client_impl/src",
+    "components/openai_ai_client_impl/src",
 ]
 testpaths = ["tests", "components/*/tests"]
 python_files = ["*_test.py", "test_*.py", "*_tests.py"]
