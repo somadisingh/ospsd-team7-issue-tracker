@@ -105,6 +105,51 @@ class TestAIHealth:
         assert body["provider"] == "openai"
         assert body["api_key_loaded"] is False
 
+    def test_providers_map_lists_both_stacks(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Health response should always include a per-provider probe so
+        frontends can render the correct model when overriding `AI_PROVIDER`
+        via `X-AI-Provider` on `POST /ai/chat`."""
+        monkeypatch.setenv("AI_PROVIDER", "claude")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-xxxx")
+        monkeypatch.setenv("CLAUDE_MODEL", "claude-sonnet-4-5")
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        monkeypatch.setenv("OPENAI_MODEL", "gpt-4o-mini")
+        raw = TestClient(app)
+        resp = raw.get("/ai/health")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["provider"] == "claude"
+        assert body["model"] == "claude-sonnet-4-5"
+        assert set(body["providers"].keys()) == {"claude", "openai"}
+        assert body["providers"]["claude"]["status"] == "ok"
+        assert body["providers"]["claude"]["model"] == "claude-sonnet-4-5"
+        assert body["providers"]["claude"]["api_key_loaded"] is True
+        assert body["providers"]["openai"]["status"] == "ok"
+        assert body["providers"]["openai"]["model"] == "gpt-4o-mini"
+        assert body["providers"]["openai"]["api_key_loaded"] is True
+
+    def test_providers_map_reports_unconfigured_per_provider(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """When only one provider's key is set, the other appears as
+        unconfigured in `providers` rather than disappearing."""
+        monkeypatch.setenv("AI_PROVIDER", "claude")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-xxxx")
+        monkeypatch.setenv("CLAUDE_MODEL", "claude-sonnet-4-5")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        raw = TestClient(app)
+        resp = raw.get("/ai/health")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["providers"]["claude"]["status"] == "ok"
+        assert body["providers"]["openai"]["status"] == "unconfigured"
+        assert body["providers"]["openai"]["model"] == ""
+        assert body["providers"]["openai"]["api_key_loaded"] is False
+
 
 @pytest.mark.unit
 class TestAIChat:

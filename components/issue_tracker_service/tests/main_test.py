@@ -347,6 +347,154 @@ class TestListEndpoints:
         assert response.status_code == 200
         mock_trello_client.get_issues_in_list.assert_called_once_with(list_id="list_456", max_issues=10)
 
+    def test_update_list(
+        self,
+        test_client: TestClient,
+        mock_trello_client: MagicMock,
+        mock_list_obj: MagicMock,
+    ) -> None:
+        """PUT /lists/{id} renames a list and returns the updated body."""
+        mock_list_obj.name = "Renamed"
+        mock_trello_client.update_list.return_value = mock_list_obj
+        response = test_client.put(
+            "/lists/list_456",
+            json={"name": "Renamed"},
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 200
+        assert response.json()["name"] == "Renamed"
+        mock_trello_client.update_list.assert_called_once_with(list_id="list_456", name="Renamed")
+
+    def test_delete_list(
+        self,
+        test_client: TestClient,
+        mock_trello_client: MagicMock,
+    ) -> None:
+        """DELETE /lists/{id} forwards success flag from the trello client."""
+        mock_trello_client.delete_list.return_value = True
+        response = test_client.delete(
+            "/lists/list_456",
+            headers={"X-Session-Token": "tok"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"success": True}
+        mock_trello_client.delete_list.assert_called_once_with("list_456")
+
+
+@pytest.mark.unit
+class TestSharedApiExceptionHandlers:
+    """The handlers in ``main.py`` for the optional ``api.exceptions`` hierarchy
+    are wired conditionally (only when the shared package exposes the right
+    classes). Since the runtime install in this workspace doesn't ship them,
+    they would otherwise be untested — so we drive them directly here.
+    """
+
+    def test_each_handler_returns_expected_status_and_tags_error_kind(self) -> None:
+        import asyncio
+
+        from issue_tracker_service.main import (
+            _shared_authentication_error_handler,
+            _shared_issue_tracker_error_handler,
+            _shared_not_found_error_handler,
+            _shared_service_unavailable_error_handler,
+            _shared_validation_error_handler,
+        )
+
+        async def run() -> None:
+            req = MagicMock()
+            req.state = MagicMock()
+
+            r404 = await _shared_not_found_error_handler(req, ValueError("nope"))
+            assert r404.status_code == 404
+
+            r401 = await _shared_authentication_error_handler(req, ValueError("unauth"))
+            assert r401.status_code == 401
+
+            r400 = await _shared_validation_error_handler(req, ValueError("bad"))
+            assert r400.status_code == 400
+
+            r502 = await _shared_service_unavailable_error_handler(req, ValueError("down"))
+            assert r502.status_code == 502
+
+            r500 = await _shared_issue_tracker_error_handler(req, ValueError("boom"))
+            assert r500.status_code == 500
+
+            # Each handler must annotate the request with an error.kind so the
+            # telemetry middleware records the right outcome label.
+            assert req.state.error_kind in {"domain", "infrastructure"}
+
+        asyncio.run(run())
+
+    def test_register_shared_api_exception_handlers_wires_all_classes(self) -> None:
+        """When ``_load_shared_api_exception_types`` returns a populated map,
+        every handler is registered on the FastAPI app. We patch the loader
+        with fake exception classes and snapshot/restore ``app.exception_handlers``
+        so the rest of the test session is unaffected."""
+        from unittest.mock import patch
+
+        from issue_tracker_service import main as main_mod
+
+        class _FakeNF(Exception):
+            pass
+
+        class _FakeAuth(Exception):
+            pass
+
+        class _FakeVal(Exception):
+            pass
+
+        class _FakeSU(Exception):
+            pass
+
+        class _FakeIT(Exception):
+            pass
+
+        fake_exceptions: dict[str, type[Exception]] = {
+            "ObjectNotFoundError": _FakeNF,
+            "ResourceNotFoundError": _FakeNF,
+            "AuthenticationError": _FakeAuth,
+            "ValidationError": _FakeVal,
+            "ServiceUnavailableError": _FakeSU,
+            "IssueTrackerError": _FakeIT,
+        }
+
+        before = dict(main_mod.app.exception_handlers)
+        try:
+            with patch.object(
+                main_mod,
+                "_load_shared_api_exception_types",
+                return_value=fake_exceptions,
+            ):
+                main_mod._register_shared_api_exception_handlers()
+            after = dict(main_mod.app.exception_handlers)
+            # All five fake classes should now have handlers attached.
+            assert _FakeNF in after
+            assert _FakeAuth in after
+            assert _FakeVal in after
+            assert _FakeSU in after
+            assert _FakeIT in after
+        finally:
+            main_mod.app.exception_handlers.clear()
+            main_mod.app.exception_handlers.update(before)
+
+    def test_register_shared_api_exception_handlers_is_noop_when_module_absent(
+        self,
+    ) -> None:
+        """Loader returns an empty dict → registration short-circuits without
+        touching ``app.exception_handlers``."""
+        from unittest.mock import patch
+
+        from issue_tracker_service import main as main_mod
+
+        before = dict(main_mod.app.exception_handlers)
+        with patch.object(
+            main_mod,
+            "_load_shared_api_exception_types",
+            return_value={},
+        ):
+            main_mod._register_shared_api_exception_handlers()
+        assert dict(main_mod.app.exception_handlers) == before
+
 
 @pytest.mark.unit
 class TestMemberEndpoints:

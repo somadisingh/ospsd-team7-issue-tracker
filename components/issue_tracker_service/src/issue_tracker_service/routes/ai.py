@@ -69,6 +69,24 @@ class AIChatResponse(BaseModel):
     truncated: bool = False
 
 
+class AIProviderHealth(BaseModel):
+    """Per-provider slice of the AI health probe.
+
+    One of these is produced for every supported LLM stack on every
+    ``GET /ai/health`` call (without invoking the upstream LLM), so callers
+    can show the right model name when overriding ``AI_PROVIDER`` via the
+    per-request ``X-AI-Provider`` header on ``POST /ai/chat``.
+    """
+
+    status: str = Field(
+        description="`ok` when the provider config loads; `unconfigured` when the API key is missing.",
+    )
+    model: str = Field(description="Model id for this provider, or empty if unconfigured.")
+    api_key_loaded: bool = Field(
+        description="Whether this provider's API key was found in the environment.",
+    )
+
+
 class AIHealthResponse(BaseModel):
     """Probe of the configured LLM stack (no upstream LLM call)."""
 
@@ -85,11 +103,62 @@ class AIHealthResponse(BaseModel):
     api_key_loaded: bool = Field(
         description="Whether the provider's API key was found in the environment.",
     )
+    providers: dict[str, AIProviderHealth] = Field(
+        default_factory=dict,
+        description=(
+            "Per-provider probes (`claude`, `openai`). Lets clients display the right "
+            "model when overriding `AI_PROVIDER` with the `X-AI-Provider` header on "
+            "`POST /ai/chat`. Both providers are probed on every health call."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------- #
 # Endpoints
 # ---------------------------------------------------------------------- #
+
+
+def _probe_claude() -> tuple[AIProviderHealth, bool]:
+    """Return (public health, allow_mutations) for the Claude stack.
+
+    ``allow_mutations`` is returned separately because it is a process-wide
+    setting (``AI_ALLOW_MUTATIONS``) surfaced at the top of
+    :class:`AIHealthResponse` rather than per-provider.
+    """
+    try:
+        cfg = ClaudeConfig.from_env()
+    except RuntimeError:
+        return (
+            AIProviderHealth(status="unconfigured", model="", api_key_loaded=False),
+            False,
+        )
+    return (
+        AIProviderHealth(
+            status="ok",
+            model=cfg.model,
+            api_key_loaded=bool(cfg.api_key),
+        ),
+        cfg.allow_mutations,
+    )
+
+
+def _probe_openai() -> tuple[AIProviderHealth, bool]:
+    """Return (public health, allow_mutations) for the OpenAI stack."""
+    try:
+        cfg = OpenAIConfig.from_env()
+    except RuntimeError:
+        return (
+            AIProviderHealth(status="unconfigured", model="", api_key_loaded=False),
+            False,
+        )
+    return (
+        AIProviderHealth(
+            status="ok",
+            model=cfg.model,
+            api_key_loaded=bool(cfg.api_key),
+        ),
+        cfg.allow_mutations,
+    )
 
 
 @router.get("/health", response_model=AIHealthResponse)
@@ -100,43 +169,29 @@ async def ai_health() -> AIHealthResponse:
     demonstrate multiprovider deployment: redeploy or change server env
     (`AI_PROVIDER`, `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`, `OPENAI_MODEL`) and
     compare responses.
-    """
-    provider = os.getenv("AI_PROVIDER", "claude").strip().lower()
-    if provider == "openai":
-        try:
-            cfg = OpenAIConfig.from_env()
-        except RuntimeError:
-            return AIHealthResponse(
-                status="unconfigured",
-                provider=provider,
-                model="",
-                allow_mutations=False,
-                api_key_loaded=False,
-            )
-        return AIHealthResponse(
-            status="ok",
-            provider=provider,
-            model=cfg.model,
-            allow_mutations=cfg.allow_mutations,
-            api_key_loaded=bool(cfg.api_key),
-        )
 
-    try:
-        config = ClaudeConfig.from_env()
-    except RuntimeError:
-        return AIHealthResponse(
-            status="unconfigured",
-            provider="claude",
-            model="",
-            allow_mutations=False,
-            api_key_loaded=False,
-        )
+    The response also includes a `providers` map probing **both** Claude and
+    OpenAI so frontends that let users override `AI_PROVIDER` per request (via
+    `X-AI-Provider` on `POST /ai/chat`) can display the correct model name for
+    the chosen stack without hardcoding it client-side.
+    """
+    claude_info, claude_allow_mut = _probe_claude()
+    openai_info, openai_allow_mut = _probe_openai()
+    providers = {"claude": claude_info, "openai": openai_info}
+
+    active = os.getenv("AI_PROVIDER", "claude").strip().lower()
+    if active not in providers:
+        active = "claude"
+    active_info = providers[active]
+    active_allow_mut = openai_allow_mut if active == "openai" else claude_allow_mut
+
     return AIHealthResponse(
-        status="ok",
-        provider="claude",
-        model=config.model,
-        allow_mutations=config.allow_mutations,
-        api_key_loaded=bool(config.api_key),
+        status=active_info.status,
+        provider=active,
+        model=active_info.model,
+        allow_mutations=active_allow_mut,
+        api_key_loaded=active_info.api_key_loaded,
+        providers=providers,
     )
 
 
