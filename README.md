@@ -53,8 +53,8 @@ ospsd-team-07/
 
 ### 1. Prerequisites
 
-- Python 3.12 or higher
-- `uv` – A fast, all-in-one Python package manager
+- Python 3.12 or higher.
+- `uv` – A fast, all-in-one Python package manager.
 
 ### 2. Initial Setup
 
