@@ -60,6 +60,16 @@ class Client(ABC):
         raise NotImplementedError("Subclasses must implement get_lists")
 
     @abstractmethod
+    def get_authorization_url(self, callback_url: str | None = None) -> str:
+        """Return the URL to authorize the application."""
+        raise NotImplementedError("Subclasses must implement get_authorization_url")
+
+    @abstractmethod
+    def exchange_request_token(self, oauth_token: str, oauth_verifier: str) -> None:
+        """Exchange the request token for an access token."""
+        raise NotImplementedError("Subclasses must implement exchange_request_token")
+
+    @abstractmethod
     def get_issues_in_list(
         self, list_id: str, max_issues: int = 100
     ) -> Iterator[Issue]:

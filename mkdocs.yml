@@ -24,6 +24,8 @@ nav:
   - "API Reference":
     - "Issue Tracker Client API": "api/issue_tracker_client_api.md"
     - "Trello Client Implementation": "api/trello_client_impl.md"
+    - "FastAPI Service": "api/issue_tracker_service.md"
+    - "Service Client Adapter": "api/issue_tracker_adapter.md"
   - "Code Quality": "code-quality.md"
   - "CI/CD": "ci-cd.md"
 

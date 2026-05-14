@@ -4,7 +4,7 @@ Quick reference guide for all test files and their contents.
 
 ## Unit Tests - Abstract Interfaces
 
-### [board_tests.py](components/issue_tracker_client_api/tests/board_tests.py)
+### board_tests.py
 **Purpose:** Test the Board abstract class interface
 
 **Test Classes:**
@@ -21,7 +21,7 @@ Quick reference guide for all test files and their contents.
 
 ---
 
-### [client_tests.py](components/issue_tracker_client_api/tests/client_tests.py)
+### client_tests.py
 **Purpose:** Test the Client abstract class interface
 
 **Test Classes:**
@@ -38,7 +38,7 @@ Quick reference guide for all test files and their contents.
 
 ---
 
-### [issue_tests.py](components/issue_tracker_client_api/tests/issue_tests.py)
+### issue_tests.py
 **Purpose:** Test the Issue abstract class interface
 
 **Test Classes:**
@@ -59,7 +59,7 @@ Quick reference guide for all test files and their contents.
 
 ---
 
-### [member_tests.py](components/issue_tracker_client_api/tests/member_tests.py)
+### member_tests.py
 **Purpose:** Test the Member abstract class interface
 
 **Test Classes:**
@@ -80,7 +80,7 @@ Quick reference guide for all test files and their contents.
 
 ## Unit Tests - Concrete Implementation
 
-### [board_test.py](components/trello_client_impl/tests/board_test.py)
+### board_test.py
 **Purpose:** Test the TrelloBoard concrete implementation of Board interface
 
 **Test Classes:**
@@ -93,7 +93,7 @@ Quick reference guide for all test files and their contents.
 
 ---
 
-### [client_test.py](components/trello_client_impl/tests/client_test.py)
+### client_test.py
 **Purpose:** Test the TrelloClient concrete implementation and factory functions
 
 **Test Classes:**
@@ -123,7 +123,7 @@ Quick reference guide for all test files and their contents.
 
 ---
 
-### [issue_test.py](components/trello_client_impl/tests/issue_test.py)
+### issue_test.py
 **Purpose:** Test the TrelloCard concrete implementation of Issue interface
 
 **Test Classes:**
@@ -136,7 +136,7 @@ Quick reference guide for all test files and their contents.
 
 ---
 
-### [member_test.py](components/trello_client_impl/tests/member_test.py)
+### member_test.py
 **Purpose:** Test the TrelloMember concrete implementation of Member interface
 
 **Test Classes:**
@@ -151,7 +151,7 @@ Quick reference guide for all test files and their contents.
 
 ## Integration Tests
 
-### [integration_tests.py](tests/integration/integration_tests.py)
+### integration_tests.py
 **Purpose:** Test component interactions and interface compliance
 
 **Test Classes:**
@@ -182,7 +182,7 @@ Quick reference guide for all test files and their contents.
 
 ## End-to-End Tests
 
-### [e2e_tests.py](tests/e2e/e2e_tests.py)
+### e2e_tests.py
 **Purpose:** Test against actual Trello API
 
 **Test Classes:**
@@ -210,12 +210,12 @@ Quick reference guide for all test files and their contents.
 
 ## Fixture Reference
 
-### API Component Fixtures ([components/issue_tracker_client_api/tests/conftest.py](components/issue_tracker_client_api/tests/conftest.py))
+### API Component Fixtures (`components/issue_tracker_client_api/tests/conftest.py`)
 - `sample_board_data()` → `dict`
 - `sample_issue_data()` → `dict`
 - `sample_member_data()` → `dict`
 
-### Trello Impl Fixtures ([components/trello_client_impl/tests/conftest.py](components/trello_client_impl/tests/conftest.py))
+### Trello Impl Fixtures (`components/trello_client_impl/tests/conftest.py`)
 - `mock_requests()` → Mocked requests module
 - `mock_os_environ()` → Mocked environment
 - `trello_client_data()` → `dict`
@@ -223,12 +223,12 @@ Quick reference guide for all test files and their contents.
 - `mock_board_response()` → `dict`
 - `mock_member_response()` → `dict`
 
-### Integration Fixtures ([tests/integration/conftest.py](tests/integration/conftest.py))
+### Integration Fixtures (`tests/integration/conftest.py`)
 - `mock_requests_integration()` → Mocked requests.request
 - `integration_env_setup()` → Mocked environment
 - `mock_client_implementation()` → Mock Client instance
 
-### E2E Fixtures ([tests/e2e/conftest.py](tests/e2e/conftest.py))
+### E2E Fixtures (`tests/e2e/conftest.py`)
 - `e2e_skip_if_no_credentials()` → Fixture that skips if credentials missing
 - `e2e_client_config()` → `dict` with credentials
 

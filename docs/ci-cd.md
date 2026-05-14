@@ -23,14 +23,14 @@ Runs the same checks you can run locally:
 |------|---------|
 | Ruff (linting) | `uv run ruff check .` |
 | Ruff (format) | `uv run ruff format --check .` |
-| Mypy | `uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src` |
+| Mypy | `uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src components/issue_tracker_adapter/src components/issue_tracker_service/src` |
 
 If any step fails, the build fails. Fix locally with:
 
 ```bash
 uv run ruff check . --fix
 uv run ruff format .
-uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src
+uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src components/issue_tracker_adapter/src components/issue_tracker_service/src
 ```
 
 ---
@@ -73,7 +73,7 @@ To reproduce the CI pipeline locally:
 # Lint (same as CI)
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src
+uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src components/issue_tracker_adapter/src components/issue_tracker_service/src
 
 # Test (same as CI)
 uv run pytest -m "unit or integration or e2e" --cov=components -v

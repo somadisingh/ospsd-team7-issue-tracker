@@ -63,6 +63,8 @@ class Client(ABC):
     def update_status(self, issue_id: str, status: str) -> bool: ...
     def assign_issue(self, issue_id: str, member_id: str) -> bool: ...
     def create_issue(self, title: str, list_id: str, *, description: str | None = None) -> Issue: ...
+    def get_authorization_url(self, callback_url: str | None = None) -> str: ...
+    def exchange_request_token(self, oauth_token: str, oauth_verifier: str) -> None: ...
 ```
 
 - **`get_issue(issue_id)`** – Return a single issue.
@@ -81,6 +83,8 @@ class Client(ABC):
 - **`get_members_on_issue(issue_id)`** – Return members assigned to the issue.
 - **`assign_issue(issue_id, member_id)`** – Assign a member to an issue.
 - **`create_issue(title, list_id, description)`** – Create a new issue in the given list.
+- **`get_authorization_url(callback_url)`** – Return the URL to redirect the user to for authorization.
+- **`exchange_request_token(oauth_token, oauth_verifier)`** – Exchange a request token and verifier for an access token.
 
 ### Issue (abstract)
 

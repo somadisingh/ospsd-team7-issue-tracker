@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://python.org)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-This repository provides a professional-grade, component-based Python client for issue tracking. It demonstrates a robust architecture by building an abstract interface and a concrete implementation backed by the [Trello REST API](https://developer.atlassian.com/cloud/trello/rest/api-group-cards/).
+This repository provides a professional-grade, component-based Python system for issue tracking. It demonstrates a robust architecture by building an abstract interface, a concrete implementation backed by the [Trello REST API](https://developer.atlassian.com/cloud/trello/rest/api-group-cards/), a FastAPI service layer with OAuth 1.0a, an auto-generated HTTP client, and an adapter that provides location transparency.
 
 The project emphasizes strict separation of concerns, dependency injection, and a comprehensive toolchain to enforce code quality and best practices.
 
@@ -21,32 +21,38 @@ The project emphasizes strict separation of concerns, dependency injection, and 
 
 This project is built on the principle of "programming integrated over time." The architecture is designed to combat complexity and ensure the system is maintainable and evolvable.
 
-- **Component-Based Design:** The system is broken down into two distinct, self-contained components. Each component has a single responsibility and can be reused or replaced with minimal effort.
+- **Component-Based Design:** The system is broken down into five distinct, self-contained components. Each component has a single responsibility and can be reused or replaced with minimal effort.
 - **Interface-Implementation Separation:** Every piece of functionality is defined by an abstract **contract** implemented as an ABC (the "what") and fulfilled by a concrete **implementation** (the "how"). This decouples business logic from specific technologies (like Trello).
 - **Dependency Injection:** Implementations are "injected" into the abstract contracts at import time. Consumers of the API only ever depend on the stable interface, not the volatile implementation details.
+- **Location Transparency:** The adapter pattern allows consumers to use the same `Client` interface regardless of whether the implementation communicates with Trello directly or through the deployed FastAPI service.
 
 ## Core Components
 
-The project is a `uv` workspace containing two primary packages:
+The project is a `uv` workspace containing five packages:
 
 1. **`issue_tracker_client_api`**: Defines the abstract `Client` base class (ABC). This is the contract for what actions an issue tracker client can perform (e.g., `get_issues_in_list`, `get_board`, `get_boards`, `get_members_on_issue`).
-2. **`trello_client_impl`**: Provides the `TrelloClient` class, a concrete implementation that uses the Trello API to perform the actions defined in the `Client` abstraction.
+2. **`trello_client_impl`**: Provides the `TrelloClient` class, a concrete implementation that uses the Trello API directly.
+3. **`issue_tracker_service`**: A FastAPI application that wraps the Trello client behind REST endpoints with OAuth 1.0a authentication. Deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com).
+4. **`issue_tracker_service_api_client`**: An auto-generated Python HTTP client created from the FastAPI service's OpenAPI specification using `openapi-python-client`.
+5. **`issue_tracker_adapter`**: A service client adapter that implements the `Client` ABC by delegating to the auto-generated HTTP client, achieving location transparency.
 
 ## Project Structure
 
 ```
 ospsd-team-07/
-├── components/                      # Source packages (uv workspace members)
-│   ├── issue_tracker_client_api/    # Abstract client base class (ABC)
-│   └── trello_client_impl/         # Trello-specific client implementation
-├── tests/                          # Integration and E2E tests
-│   ├── integration/                # Component integration tests
-│   └── e2e/                        # End-to-end tests (real Trello API)
-├── docs/                            # Documentation source files
-├── .circleci/                      # CircleCI configuration
-├── conftest.py                     # Pytest fixtures
-├── pyproject.toml                  # Project configuration (dependencies, tools)
-└── uv.lock                         # Locked dependency versions
+├── components/                              # Source packages (uv workspace members)
+│   ├── issue_tracker_client_api/            # Abstract client base class (ABC)
+│   ├── trello_client_impl/                  # Direct Trello implementation
+│   ├── issue_tracker_service/               # FastAPI service (OAuth + REST)
+│   ├── issue_tracker_service_api_client/    # Auto-generated HTTP client
+│   └── issue_tracker_adapter/               # Service client adapter
+├── tests/                                   # Integration and E2E tests
+│   ├── integration/                         # Component integration tests
+│   └── e2e/                                 # End-to-end tests (real Trello API)
+├── docs/                                    # Documentation source files
+├── .circleci/                               # CircleCI configuration
+├── pyproject.toml                           # Project configuration (dependencies, tools)
+└── uv.lock                                  # Locked dependency versions
 ```
 
 ## Project Setup
@@ -120,7 +126,7 @@ All commands should be run from the project root with the virtual environment ac
 
 - **Static Type Checking (Mypy):**
     ```bash
-    uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src
+    uv run mypy components/issue_tracker_client_api/src components/trello_client_impl/src components/issue_tracker_adapter/src components/issue_tracker_service/src
     ```
 
 - **Testing (Pytest):**
@@ -199,22 +205,41 @@ See [docs/ci-cd.md](docs/ci-cd.md) for detailed CI/CD setup instructions.
 - Run full test suite (`uv run pytest`) before pushing to ensure CI compatibility
 - The CircleCI pipeline provides automated validation on every push
 
+## Deployment
+
+The FastAPI service is deployed on [Render](https://ospsd-team7-issue-tracker.onrender.com) with continuous deployment via CircleCI.
+
+| Setting | Value |
+|---|---|
+| **Platform** | [Render](https://render.com) (Web Service) |
+| **Live URL** | `https://ospsd-team7-issue-tracker.onrender.com` |
+| **Health check** | `https://ospsd-team7-issue-tracker.onrender.com/health` |
+| **Build command** | `pip install uv && uv sync --all-extras` |
+| **Start command** | `uv run uvicorn issue_tracker_service.main:app --host 0.0.0.0 --port $PORT` |
+
+### Environment variables (configured in Render dashboard)
+
+| Variable | Description |
+|---|---|
+| `TRELLO_API_KEY` | Trello API key |
+| `TRELLO_API_SECRET` | Trello API secret (consumer secret for OAuth) |
+| `TRELLO_CALLBACK_URL` | OAuth callback URL (e.g. `https://ospsd-team7-issue-tracker.onrender.com/auth/callback`) |
+
+### CI/CD pipeline
+
+Every push triggers the following CircleCI workflow (see [`.circleci/config.yml`](.circleci/config.yml)):
+
+1. **`lint`** — Ruff (check + format) and Mypy
+2. **`test`** — Unit, integration, and E2E tests with coverage reporting
+3. **`health_check`** — Starts the service locally and verifies `GET /health` returns 200
+4. **`deploy`** — Triggers a Render deploy hook (runs only after all three jobs above pass)
+
+### A note on OAuth
+
+Trello's API uses **OAuth 1.0a** (not OAuth 2.0). Our implementation follows the provider's required protocol. The service exposes `/auth/login` (initiate) and `/auth/callback` (exchange tokens) endpoints that handle the full OAuth 1.0a three-legged flow, issuing server-side session tokens for subsequent API calls.
+
+For more details, see [docs/ci-cd.md](docs/ci-cd.md).
+
 ## License
 
 [MIT License](LICENSE)
-* **Somaditya Singh** (`ss20288`)
-* **Saakshi Narayan** (`sn4230`)
-* **Mingjian Li** (`ml8347`)
-* **Joshua Leeman** (`jl17087`)
-* **Riddhi Prasad** (`rrp4822`)
-
-## Project Description
-Welcome to the repository for Team 7! This project focuses on developing an interface and implementation for Trello. Our goal is to collaborate effectively to deliver a robust and scalable solution using the best software development practices.
-
-## Setup Instructions
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/somadisingh/ospsd-team7-issue-tracker.git
-   
-## LICENSE
-[MIT LICENSE] - see the [LICENSE](LICENSE) file for details.

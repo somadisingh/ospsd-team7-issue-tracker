@@ -1,4 +1,4 @@
-"""Unit tests for the Client abstract class."""
+"""Unit tests for the Client abstract class and domain exceptions."""
 
 from abc import ABC
 from collections.abc import Iterator
@@ -6,6 +6,13 @@ from collections.abc import Iterator
 import pytest
 from issue_tracker_client_api import Board, Issue, List, Member
 from issue_tracker_client_api.client import Client, get_client
+from issue_tracker_client_api.exceptions import (
+    AuthenticationError,
+    IssueTrackerError,
+    ResourceNotFoundError,
+    ServiceUnavailableError,
+    ValidationError,
+)
 
 
 class _ConcreteIssue(Issue):
@@ -175,6 +182,12 @@ class _ConcreteClient(Client):
             board_id="test_board_id",
         )
 
+    def get_authorization_url(self, callback_url: str | None = None) -> str:
+        return "https://example.com/auth"
+
+    def exchange_request_token(self, oauth_token: str, oauth_verifier: str) -> None:
+        pass
+
 
 @pytest.mark.unit
 class TestClientAbstractClass:
@@ -208,6 +221,8 @@ class TestClientAbstractClass:
             "get_members_on_issue",
             "assign_issue",
             "create_issue",
+            "get_authorization_url",
+            "exchange_request_token",
         ]
         for method_name in required_methods:
             assert hasattr(Client, method_name)
@@ -232,3 +247,45 @@ class TestGetClientFactory:
         """Test that get_client rejects interactive flag when not implemented."""
         with pytest.raises(NotImplementedError, match="Subclasses must implement"):
             get_client(interactive=True)
+
+
+@pytest.mark.unit
+class TestDomainExceptions:
+    """Test domain-specific exception hierarchy."""
+
+    def test_base_exception_is_catchable(self) -> None:
+        with pytest.raises(IssueTrackerError):
+            raise IssueTrackerError
+
+    def test_resource_not_found_inherits_base(self) -> None:
+        exc = ResourceNotFoundError("board", "abc123")
+        assert isinstance(exc, IssueTrackerError)
+        assert exc.resource_type == "board"
+        assert exc.resource_id == "abc123"
+        assert "board" in str(exc)
+        assert "abc123" in str(exc)
+
+    def test_authentication_error_inherits_base(self) -> None:
+        assert isinstance(AuthenticationError(), IssueTrackerError)
+
+    def test_service_unavailable_inherits_base(self) -> None:
+        assert isinstance(ServiceUnavailableError(), IssueTrackerError)
+
+    def test_validation_error_inherits_base(self) -> None:
+        assert isinstance(ValidationError(), IssueTrackerError)
+
+    def test_resource_not_found_catchable_as_base(self) -> None:
+        with pytest.raises(IssueTrackerError):
+            raise ResourceNotFoundError("board", "id")
+
+    def test_auth_error_catchable_as_base(self) -> None:
+        with pytest.raises(IssueTrackerError):
+            raise AuthenticationError
+
+    def test_service_unavailable_catchable_as_base(self) -> None:
+        with pytest.raises(IssueTrackerError):
+            raise ServiceUnavailableError
+
+    def test_validation_error_catchable_as_base(self) -> None:
+        with pytest.raises(IssueTrackerError):
+            raise ValidationError
